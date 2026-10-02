@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync, spawn } from 'node:child_process';
 import { readWorld, syncReport, git, cwDir, build } from './lib/world.mjs';
 import { runAgent, parseJson, defaultAgent, readTools, editTools, NO_NETWORK_NO_SHELL } from './lib/agent.mjs';
-import { P } from './lib/prompts.mjs';
+import { P, checkFound } from './lib/prompts.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GAME = path.join(ROOT, 'game');
@@ -151,6 +151,14 @@ export function startServer({ repo, port = 4477, opts = {} }) {
       const W = getWorld(); const f = focusOf(W, b);
       const r = await runAgent({ ...agentOpts, cwd: repo, ...READ_ONLY, prompt: P.ask(W, f.w, f, String(b.question || '').slice(0, 4000)), timeoutMs: 5 * 60 * 1000 });
       return { text: r.text };
+    },
+    // Search by meaning: the player describes a symptom, the agent points at the flows and buildings behind it.
+    'POST /api/find': async (b) => {
+      const W = getWorld();
+      const query = String(b.query || '').trim().slice(0, 600);
+      if (!query) return { results: [], note: '' };
+      const r = await runAgent({ ...agentOpts, cwd: repo, ...READ_ONLY, prompt: P.find(W, query, true), timeoutMs: 3 * 60 * 1000 });
+      return checkFound(W, parseJson(r.text));
     },
     'POST /api/simulate': async (b) => {
       const W = getWorld(); const f = focusOf(W, b);

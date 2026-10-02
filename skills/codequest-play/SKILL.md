@@ -23,7 +23,7 @@ compatibility: Requires Node.js 18+ and git. Works in Claude Code as a plugin an
    server without that key — and the controls in one short paragraph: world 1 is open and the
    rest unlock in order; press Start on the mission board, carry the case and pick the right road
    at every fork (walk into a signpost or press its number). If they are hunting one bug, tell them
-   to press / and search for the logic: it jumps straight there, even into a locked world, with the
+   to press / and describe what goes wrong in their own words: the agent finds the logic and it jumps straight there, even into a locked world, with the
    lab open; arrows/WASD or click to move, E to
    land/look; Q quests, N notes & tasks.
 

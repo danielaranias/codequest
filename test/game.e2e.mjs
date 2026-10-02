@@ -277,3 +277,51 @@ test('searching a building opens its panel on the spot', { skip }, async () => {
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
+
+// ---------- search by meaning (the agent is replaced by a stand-in; the server side is tested in find.test.mjs) ----------
+
+test('describing a symptom asks the agent, shows why each place fits, and jumps there', { skip }, async () => {
+  const { page, errors, close } = await openGame();
+  try {
+    const flow = map.two.flows[0];
+    await page.evaluate((f) => {
+      const G = window.__codequest;
+      G.backend.can.find = true;
+      G.backend.find = (q) => new Promise((ok) => setTimeout(() => ok({ asked: q, note: '',
+        results: [{ type: 'flow', wid: 'two', id: f.id, name: f.name, where: 'Store', why: 'This is where the items are written.' }] }), 200));
+    }, { id: flow.id, name: flow.name });
+    await page.keyboard.press('/');
+    await page.keyboard.type('zzz nothing is kept after sending');
+    const ask = page.locator('#search-results .res.ask');
+    await ask.waitFor(WAIT);
+    assert.match(await ask.textContent(), /Find by meaning/);
+    await page.keyboard.press('Enter');
+    await page.locator('#search-results .thinking').waitFor(WAIT);
+    const row = page.locator('#search-results .res', { hasText: flow.name });
+    await row.waitFor(WAIT);
+    const text = await row.textContent();
+    assert.match(text, /This is where the items are written\./, 'the reason is shown');
+    assert.match(text, /AI/); assert.match(text, /locked/);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__codequest.scene === 'world' && window.__codequest.wid === 'two', null, WAIT);
+    assert.equal(await page.evaluate(() => window.__codequest.flowSel), flow.id);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('without an agent the game says so and offers no AI search; an agent error is shown in plain words', { skip }, async () => {
+  const { page, errors, close } = await openGame();
+  try {
+    await page.keyboard.press('/');
+    await page.keyboard.type('zzz nothing matches this');
+    await page.locator('#search-results .none').waitFor(WAIT);
+    assert.equal(await page.locator('#search-results .res.ask').count(), 0);
+    assert.match(await page.locator('#search-results .none').textContent(), /coding agent/);
+    await page.evaluate(() => { const G = window.__codequest; G.backend.can.find = true; G.backend.find = () => Promise.reject(new Error('"claude" is not installed or not on PATH')); });
+    await page.keyboard.type('x');
+    await page.keyboard.press('Enter');
+    await page.locator('#search-results .none', { hasText: 'could not search' }).waitFor(WAIT);
+    assert.match(await page.locator('#search-results').textContent(), /not installed/);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});

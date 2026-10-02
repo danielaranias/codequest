@@ -19,7 +19,9 @@ At that point you want to take control. But the codebase the AI wrote is overwhe
 **CodeQuest turns your codebase into a game, so you can understand it and take back control.**
 Your coding agent maps the repo into worlds, in the order the real system runs. Then:
 
-- **Go straight to what is broken.** Search for the logic (press `/`) and jump in. No unlocking first.
+- **Go straight to what is broken.** Press `/` and describe what goes wrong in your own words
+  ("the chart does not show after I upload a file"). Your own agent finds the logic behind it,
+  tells you why, and you jump in. No unlocking first. Plain word search works too, even offline.
 - **See how it really runs.** Follow one real case through the code. At every fork, predict the
   road the code takes. Wrong? You see the exact condition you missed.
 - **Drop in the case that fails.** In the lab, inject your own case or change a flow and watch what breaks.
@@ -80,8 +82,8 @@ Commit `.codequest/meta.json` and `.codequest/worlds/` so your team plays the sa
 
 ## What it costs
 
-CodeQuest is free and has no server. Mapping a repo and the AI features (ask, challenge,
-simulate, tasks) use your own Claude Code or Codex plan. Walking, missions, quests and
+CodeQuest is free and has no server. Mapping a repo and the AI features (search by meaning, ask,
+challenge, simulate, tasks) use your own Claude Code or Codex plan. Walking, missions, quests and
 snapshots use no AI at all.
 
 ## Private and safe by design
@@ -105,7 +107,7 @@ or once in `~/.config/codequest/config.json`:
 
 ## Status
 
-Version 1.1. Tried so far on two codebases with Claude Code on Linux and macOS. The Codex
+Version 1.2. Tried so far on two codebases with Claude Code on Linux and macOS. The Codex
 adapter and Windows are experimental. Issues with "the mapper got this wrong" are the most useful ones.
 
 ## Contributing

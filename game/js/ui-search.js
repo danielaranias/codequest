@@ -1,4 +1,6 @@
-/* CodeQuest — search and jump: find a world, a building or a flow by words, and go straight to it.
+/* CodeQuest — search and jump: find a world, a building or a flow and go straight to it.
+   Two ways to find: by words (instant, works offline) and by meaning (the player describes a symptom
+   in their own words and their own agent points at the logic behind it).
    For the player who is stuck on one piece of logic and does not want to clear worlds in order.
    Owns the search box, its result list, and the "jump into a locked world" question.
    Loads after ui-init.js because it adds its wiring to U.init.
@@ -11,6 +13,8 @@
 
   const KIND = { world: 'World', flow: 'Flow', entity: 'Building' };
   let index = null, hits = [], cursor = 0;
+  // by-meaning search: null = not asked, 'wait' = the agent is thinking, else { results, note } or { error }
+  let ai = null, aiFor = '', ticket = 0;
 
   // One flat list of everything a player can jump to, with the words that find it.
   // `name` counts most, `text` is everything else worth matching (summaries, step actions, file paths).
@@ -66,29 +70,66 @@
     return (a ? '…' : '') + it.text.slice(a, i + 60).trim() + (i + 60 < it.text.length ? '…' : '');
   }
 
+  const canAsk = (q) => !!G.backend.can.find && q.trim().length >= 3;
+  // Rows the arrow keys can stop on: word hits, AI hits, then the "find by meaning" row.
+  const rows = (q) => [...hits, ...(ai && ai.results ? ai.results : []), ...(canAsk(q) && !ai ? [{ ask: true }] : [])];
+
+  function resultRow(it, on, sub, tag) {
+    const locked = !G.unlocked(G.worldById(it.wid));
+    return el('button', { class: 'res' + (on ? ' on' : ''), role: 'option', type: 'button', onclick: () => go(it) },
+      el('span', { class: 'k k-' + it.type, text: KIND[it.type] }),
+      el('span', { class: 'm' }, el('b', { text: it.name }), el('small', { text: (it.where ? it.where + ' · ' : '') + sub })),
+      tag ? el('span', { class: 'ai-tag', text: 'AI' }) : null,
+      locked ? el('span', { class: 'lock', text: 'locked · jump in' }) : null);
+  }
+
   function paint(q) {
     const box = $('#search-results');
     box.innerHTML = '';
     if (!q.trim()) { box.hidden = true; return; }
     box.hidden = false;
-    if (!hits.length) { box.append(el('div', { class: 'none', text: 'Nothing mapped matches that. Try a function, file or screen name.' })); return; }
-    hits.forEach((it, i) => {
-      const locked = !G.unlocked(G.worldById(it.wid));
+    const list = rows(q);
+    hits.forEach((it, i) => box.append(resultRow(it, i === cursor, excerpt(it, q))));
+    if (ai === 'wait') {
+      box.append(el('div', { class: 'thinking' }, el('span', { class: 'dots' }), 'Your agent is looking for what you mean…'));
+    } else if (ai && ai.error) {
+      box.append(el('div', { class: 'none', text: 'The agent could not search: ' + ai.error }));
+    } else if (ai && ai.results) {
+      box.append(el('div', { class: 'sep', text: ai.results.length ? 'By meaning' : (ai.note || 'The agent found nothing on the map that fits.') }));
+      ai.results.forEach((it, i) => box.append(resultRow(it, hits.length + i === cursor, it.why, true)));
+      if (ai.results.length && ai.note) box.append(el('div', { class: 'none', text: ai.note }));
+    } else if (canAsk(q)) {
       box.append(el('button', {
-        class: 'res' + (i === cursor ? ' on' : ''), role: 'option', type: 'button',
-        onclick: () => go(it),
-      },
-      el('span', { class: 'k k-' + it.type, text: KIND[it.type] }),
-      el('span', { class: 'm' },
-        el('b', { text: it.name }),
-        el('small', { text: (it.where ? it.where + ' · ' : '') + excerpt(it, q) })),
-      locked ? el('span', { class: 'lock', text: 'locked · jump in' }) : null));
-    });
+        class: 'res ask' + (list.length - 1 === cursor ? ' on' : ''), type: 'button', onclick: () => askAgent(q),
+      }, el('span', { class: 'k k-ai', text: 'AI' }),
+      el('span', { class: 'm' }, el('b', { text: 'Find by meaning' }),
+        el('small', { text: hits.length ? 'Describe what goes wrong; your agent finds the logic' : 'No names match. Let your agent find the logic behind it' }))));
+    } else if (!hits.length) {
+      const why = G.backend.can.find ? 'Type a few more letters.' : 'Open the game from your coding agent to search by meaning.';
+      box.append(el('div', { class: 'none', text: 'Nothing on the map has those words. ' + why }));
+    }
   }
+
+  // Ask the player's own agent. Late answers for an older query are dropped.
+  async function askAgent(q) {
+    const mine = ++ticket;
+    ai = 'wait'; aiFor = q; paint(q);
+    try {
+      const r = await G.backend.find(q.trim());
+      if (mine !== ticket) return;
+      ai = { results: r.results || [], note: r.note || '' };
+    } catch (e) {
+      if (mine !== ticket) return;
+      ai = { error: e.message || String(e) };
+    }
+    cursor = hits.length;
+    if ($('#search').value === q) paint(q);
+  }
+  U.findByMeaning = askAgent; // for tests
 
   function close() {
     const inp = $('#search');
-    inp.value = ''; hits = []; $('#search-results').hidden = true; inp.blur(); $('#stage').focus();
+    inp.value = ''; hits = []; ai = null; ticket++; $('#search-results').hidden = true; inp.blur(); $('#stage').focus();
   }
 
   // Go to a search result: open its world if needed, land there, and put the player on the thing itself.
@@ -139,15 +180,21 @@
   U.init = function () {
     init();
     const inp = $('#search');
-    inp.addEventListener('input', () => { hits = search(inp.value); cursor = 0; paint(inp.value); });
+    inp.addEventListener('input', () => { hits = search(inp.value); cursor = 0; if (inp.value !== aiFor) { ai = null; ticket++; } paint(inp.value); });
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
-        if (hits.length) { cursor = (cursor + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length; paint(inp.value); }
-      } else if (e.key === 'Enter') { e.preventDefault(); if (hits[cursor]) go(hits[cursor]); }
+        const n = rows(inp.value).length;
+        if (n) { cursor = (cursor + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; paint(inp.value); }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const pick = rows(inp.value)[cursor];
+        if (pick && pick.ask) askAgent(inp.value);
+        else if (pick) go(pick);
+      }
       else if (e.key === 'Escape') { e.stopPropagation(); close(); }
     });
-    inp.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== inp) $('#search-results').hidden = true; }, 150));
+    inp.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== inp && ai !== 'wait') $('#search-results').hidden = true; }, 150));
     inp.addEventListener('focus', () => { if (inp.value.trim()) { hits = search(inp.value); paint(inp.value); } });
   };
 })(window.CW);

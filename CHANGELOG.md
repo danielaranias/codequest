@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0
+- Search by meaning: describe a symptom in your own words and your own agent (Claude Code or Codex)
+  points at the flows and buildings behind it, with a one-line reason for each. Word search stays instant and offline.
+
 ## 1.1.0
 - Search and jump: press `/`, type any word from the logic, and go straight to that flow or building.
 - Locked worlds can be opened on the spot ("Jump in"). The fog lifts and the lab opens; missions still count for stars.

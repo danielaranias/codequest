@@ -9,7 +9,7 @@ So the rule is: **the repository being played is untrusted input.**
 |---|---|
 | A repo picks a command to run on your machine | `agent`, `model` and `testCommand` are read only from your flags or `~/.config/codequest/config.json`. The same keys inside the repo are ignored, and `play` says so. |
 | A repo's own agent settings (hooks, MCP servers) run | The agent is started with `--setting-sources user`. |
-| Text in the code tells the AI to do something else (prompt injection) | Ask / Challenge / Simulate get read-only tools scoped to the repo. No shell, no network, no sub-agents. Every prompt marks repo content as data. |
+| Text in the code tells the AI to do something else (prompt injection) | Search / Ask / Challenge / Simulate get read-only tools scoped to the repo. No shell, no network, no sub-agents. Every prompt marks repo content as data. |
 | The AI edits your working files | Real runs and tasks happen in a separate git worktree on a `codequest/task-*` branch. Nothing is pushed. Edit tools are scoped to that worktree. |
 | A map points at files outside the repo | Paths must be repo-relative; reads resolve symlinks and are refused outside the repo root. |
 | A map smuggles options into git | Commit ids are used only if they are plain hex SHAs. |

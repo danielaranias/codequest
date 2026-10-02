@@ -86,6 +86,9 @@ CodeQuest is free and has no server. Mapping a repo and the AI features (search 
 challenge, simulate, tasks) use your own Claude Code or Codex plan. Walking, missions, quests and
 snapshots use no AI at all.
 
+One measured run, as a rough guide: mapping a 75-file library with Claude Code took about 4 minutes
+and about $3 at API prices, and gave 6 worlds and 72 missions. A search by meaning takes about 5 seconds.
+
 ## Private and safe by design
 
 - Runs on 127.0.0.1 behind a one-time key. No telemetry.
@@ -107,7 +110,7 @@ or once in `~/.config/codequest/config.json`:
 
 ## Status
 
-Version 1.2. Tried so far on two codebases with Claude Code on Linux and macOS. The Codex
+Version 1.2. Tried so far on three codebases with Claude Code on Linux and macOS. The Codex
 adapter and Windows are experimental. Issues with "the mapper got this wrong" are the most useful ones.
 
 ## Contributing

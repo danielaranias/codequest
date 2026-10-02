@@ -44,7 +44,4 @@ Browser tests (optional): `npm i --no-save playwright@1 && npx playwright instal
 
 ## Licence of your contribution
 
-CodeQuest is free to use and source-available; selling it needs a commercial licence
-([COMMERCIAL.md](COMMERCIAL.md)). By opening a pull request you agree that your contribution is
-licensed under the Apache License 2.0 **and** that the project owner may also offer it under
-other terms, including commercial licences. If you cannot agree to that, please open an issue instead.
+CodeQuest is MIT licensed. By opening a pull request you agree your contribution is under the same licence.

@@ -33,5 +33,5 @@
     "claude-code-plugin"
   ],
   "private": true,
-  "license": "SEE LICENSE IN LICENSE"
+  "license": "MIT"
 }

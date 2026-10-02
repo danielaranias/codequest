@@ -3,6 +3,7 @@
 
 <p align="center">
   <a href="https://github.com/danielaranias/codequest/actions/workflows/ci.yml"><img src="https://github.com/danielaranias/codequest/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT licence">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="zero dependencies">
   <img src="https://img.shields.io/badge/node-%E2%89%A518-blue" alt="node 18+">
   <img src="https://img.shields.io/badge/runs-on%20your%20machine-orange" alt="local">
@@ -107,5 +108,4 @@ How it works: [SPEC.md](SPEC.md) · Map format: [schema/WORLD_FORMAT.md](schema/
 
 ## Licence
 
-Free to use, change and share, at home and at work. **Selling it needs a commercial licence** —
-see [COMMERCIAL.md](COMMERCIAL.md). Legal text: [LICENSE](LICENSE) (Apache 2.0 + Commons Clause).
+[MIT](LICENSE). Use it, change it, ship it.

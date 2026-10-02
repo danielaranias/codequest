@@ -2,7 +2,7 @@
 
 ## 1.0.0
 - Renamed to CodeQuest (`.codequest/`, `codequest` CLI, `codequest-*` skills).
-- Licence: Apache 2.0 + Commons Clause. Free to use; selling needs a commercial licence.
+- Licence: MIT.
 - 69 tests for the map, the server and the CLI, plus browser tests of the game. Windows in CI.
 - Fixes found by those tests: saved notes with non-English text could be corrupted; a typo in
   `worldOrder` was silent; a malformed road crashed `validate`; a pin past the end of a file read as in sync.

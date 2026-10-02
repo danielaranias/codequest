@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSafe, isSha, isRepoPath, validate, assemble } from '../server/lib/world.mjs';
-import { readTools, editTools, NO_NETWORK_NO_SHELL } from '../server/lib/agent.mjs';
+import { readTools, editTools, ruleFor, NO_NETWORK_NO_SHELL } from '../server/lib/agent.mjs';
 import { loadConfig, startServer } from '../server/server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,9 +74,13 @@ test('the repo cannot choose the agent, the model or the test command', () => {
 });
 
 test('agent tool rules are scoped to a directory and have no shell or network', () => {
-  const r = readTools('/work/repo'), e = editTools('/work/tree');
-  assert.deepEqual(r, ['Read(//work/repo/**)', 'Grep(//work/repo/**)', 'Glob(//work/repo/**)']);
-  assert.ok(e.every((t) => t.endsWith('(//work/tree/**)')));
+  assert.equal(ruleFor('/work/repo'), '//work/repo/**');
+  assert.equal(ruleFor('/work/repo/'), '//work/repo/**');
+  assert.equal(ruleFor('C:\\Users\\ann\\repo'), '//c/Users/ann/repo/**', 'Windows drives are written the POSIX way');
+  const here = ruleFor(path.resolve('some', 'repo'));
+  const r = readTools(path.resolve('some', 'repo')), e = editTools(path.resolve('some', 'tree'));
+  assert.deepEqual(r, [`Read(${here})`, `Grep(${here})`, `Glob(${here})`]);
+  assert.ok(e.every((t) => /^(Edit|Write|MultiEdit)\(\/\/.*\/some\/tree\/\*\*\)$/.test(t)), e.join(' '));
   for (const t of ['Bash', 'WebFetch', 'WebSearch']) assert.ok(NO_NETWORK_NO_SHELL.includes(t));
   assert.ok(![...r, ...e].some((t) => /^(Bash|WebFetch|WebSearch)/.test(t)));
 });

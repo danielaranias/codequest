@@ -12,7 +12,13 @@ export function defaultAgent() {
 }
 
 // Claude Code permission rule for "anything under this directory": Read(//abs/path/**)
-const under = (dir) => '/' + path.resolve(dir).replace(/\\/g, '/') + '/**';
+// Windows paths are written the POSIX way in rules: C:\\Users\\ann\\repo -> //c/Users/ann/repo/**
+export function ruleFor(absPath) {
+  const p = String(absPath).replace(/\\/g, '/').replace(/\/+$/, '');
+  const drive = /^([A-Za-z]):(\/.*)?$/.exec(p);
+  return (drive ? `//${drive[1].toLowerCase()}${drive[2] || ''}` : '/' + p) + '/**';
+}
+const under = (dir) => ruleFor(path.resolve(dir));
 /** Read-only tools, confined to the given directories. */
 export function readTools(...dirs) {
   return dirs.flatMap((d) => [`Read(${under(d)})`, `Grep(${under(d)})`, `Glob(${under(d)})`]);

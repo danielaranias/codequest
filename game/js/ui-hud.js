@@ -48,7 +48,7 @@
     const h = $('#hint');
     if (!near) { h.hidden = true; return; }
     h.hidden = false;
-    if (G.scene === 'over' && !G.unlocked(near)) { h.innerHTML = `Locked · ${esc(G.lockHint(near))}`; return; }
+    if (G.scene === 'over' && !G.unlocked(near)) { h.innerHTML = `<kbd>E</kbd>Locked · ${esc(G.lockHint(near))}, or jump in`; return; }
     if (G.scene === 'world' && G.mission && G.mission.phase !== 'won' && G.mission.phase !== 'lost') { h.hidden = true; return; }
     h.innerHTML = `<kbd>E</kbd>${G.scene === 'over' ? 'Land on ' : 'Look at '}${esc(near.name)}`;
   };

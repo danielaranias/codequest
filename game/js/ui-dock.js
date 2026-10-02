@@ -68,8 +68,8 @@
         }),
         el('button', {
           class: 'btn ghost sm',
-          disabled: !beaten,
-          title: beaten ? 'Replay, inject your own case, or change a flow' : 'Beat a mission first',
+          disabled: !beaten && !G.jumped(w.id),
+          title: beaten || G.jumped(w.id) ? 'Replay, inject your own case, or change a flow' : 'Beat a mission first',
           text: 'Lab',
           onclick: () => { G.lab = true; renderDock(); CW.guide.update(); },
         }))));
@@ -132,7 +132,7 @@
       el('button', { class: 'btn ghost', text: '‹ Missions', onclick: back }),
       el('span', { class: 'lbl', text: 'Lab' }));
     for (const f of w.flows) {
-      const open = G.flowBeaten(w, f) || G.state.freeRoam;
+      const open = G.labOpen(w, f);
       bar.append(el('button', {
         class: 'fchip' + (G.flowSel === f.id ? ' on' : ''),
         disabled: !open,

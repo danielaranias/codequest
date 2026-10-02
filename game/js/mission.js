@@ -14,10 +14,10 @@
   G.flowBeaten = (w, f) => (f.cases || []).some((c) => G.stars(w.id, f.id, c.id) > 0);
   G.worldCleared = (w) => G.playableFlows(w).every((f) => G.flowBeaten(w, f));
   G.worldIndex = (wid) => G.W.worlds.findIndex((w) => w.id === wid);
-  // A world is open when every world before it is cleared (or free roam is on).
+  // A world is open when every world before it is cleared, the player jumped into it, or free roam is on.
   G.unlocked = function (w) {
     const i = G.worldIndex(w.id);
-    if (i <= 0 || G.state.freeRoam) return true;
+    if (i <= 0 || G.state.freeRoam || G.state.opened?.[w.id]) return true;
     const prev = G.W.worlds[i - 1];
     return G.unlocked(prev) && G.worldCleared(prev);
   };
@@ -37,7 +37,17 @@
     for (const f of G.playableFlows(w)) for (const c of f.cases) if (!G.stars(w.id, f.id, c.id)) return { flow: f, kase: c };
     return null;
   };
-  G.isSeen = (wid, eid) => !!(G.state.freeRoam || G.state.seen[wid]?.[eid] || G.state.visited[wid]?.[eid]);
+  // Jumping straight into a world (search, or "jump in" on a locked island) opens it for good:
+  // no fog on its buildings and its lab is open, because the player came to dig, not to be taught.
+  G.jumped = (wid) => !!G.state.opened?.[wid];
+  G.openWorld = function (wid) {
+    G.state.opened = G.state.opened || {};
+    if (G.state.opened[wid]) return false;
+    G.state.opened[wid] = 1; G.save();
+    return true;
+  };
+  G.labOpen = (w, f) => G.flowBeaten(w, f) || G.state.freeRoam || G.jumped(w.id);
+  G.isSeen = (wid, eid) => !!(G.state.freeRoam || G.jumped(wid) || G.state.seen[wid]?.[eid] || G.state.visited[wid]?.[eid]);
   // Lift the fog from one building. Returns false if it was already seen.
   G.reveal = function (eid) {
     const bag = (G.state.seen[G.wid] = G.state.seen[G.wid] || {});

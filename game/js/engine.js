@@ -23,7 +23,7 @@
   const TITLES = ['Deckhand', 'Explorer', 'Pathfinder', 'Cartographer', 'Code Ranger', 'Archivist', 'Architect', 'Oracle'];
 
   CW.freshState = () => ({
-    v: 1, xp: 0, visited: {}, landed: {}, traced: {}, cases: {}, missions: {}, seen: {}, freeRoam: false,
+    v: 1, xp: 0, visited: {}, landed: {}, traced: {}, cases: {}, missions: {}, seen: {}, opened: {}, freeRoam: false,
     quests: {}, cracks: {}, crackMiss: {}, notes: [], tasks: [], badges: {}, counters: {}, updatedAt: null });
 
   // ---------- helpers ----------
@@ -126,14 +126,10 @@
     const prev = G.W.worlds[G.worldIndex(w.id) - 1];
     return prev ? `Clear ${prev.name} first` : '';
   };
-  // Enter a world from the overworld (refused if it is still locked).
+  // Enter a world from the overworld. A locked one asks first: jump in anyway, or keep the order.
   G.land = function (wid) {
     const target = G.worldById(wid);
-    if (!G.unlocked(target)) {
-      CW.ui.toast(`Locked. ${G.lockHint(target)}: beat one mission in each of its flows.`, 'err');
-      CW.sfx('wrong');
-      return;
-    }
+    if (!G.unlocked(target)) { CW.ui.askOpen(target); return; }
     G.mission = null; G.lab = false;
     G.scene = 'world'; G.wid = wid; G.L = G.layout(wid);
     G.player.x = G.L.dock.x + 30; G.player.y = G.L.dock.y; G.player.target = null; G.player.dir = 0;
@@ -258,7 +254,7 @@
       for (const w of G.W.worlds) {
         const I = G.OW.isl[w.id];
         if (CW.pointInPoly(p, I.poly) || CW.dist(p, { x: I.c.x, y: I.c.y + I.r + 30 }) < 60) {
-          if (!G.unlocked(w)) { CW.ui.toast(`Locked. ${G.lockHint(w)}.`, 'err'); return; }
+          if (!G.unlocked(w)) { CW.ui.askOpen(w); return; }
           G.player.target = { x: I.c.x, y: I.c.y, land: w.id }; return;
         }
       }
@@ -526,6 +522,7 @@
       if (/^[1-9]$/.test(k) && G.mission?.phase === 'choose') CW.mission.choose(Number(k) - 1);
       if (k === 'Escape') CW.ui.escape();
       if (k === 'm' && G.scene === 'world') G.setSail();
+      if (k === '/') { e.preventDefault(); CW.ui.focusSearch(); }
       if (k === 'q') CW.ui.togglePane('quests');
       if (k === 'n') CW.ui.togglePane('notes');
       if (k === '+' || k === '=') G.zoomMul = CW.clamp(G.zoomMul * 1.15, 0.4, 2.2);

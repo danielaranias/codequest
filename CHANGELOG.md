@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+- Search and jump: press `/`, type any word from the logic, and go straight to that flow or building.
+- Locked worlds can be opened on the spot ("Jump in"). The fog lifts and the lab opens; missions still count for stars.
+- "Something is broken — find it" on the first screen.
+
 ## 1.0.0
 - Renamed to CodeQuest (`.codequest/`, `codequest` CLI, `codequest-*` skills).
 - Licence: MIT.

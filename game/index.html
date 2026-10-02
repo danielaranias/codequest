@@ -17,6 +17,10 @@
       <div class="crumbs"><span id="crumb-repo"></span><span id="crumb-world"></span></div>
       <button id="sync-chip" class="chip" type="button"></button>
     </div>
+    <div class="search" role="search">
+      <input id="search" type="search" placeholder="Search the logic…  ( / )" autocomplete="off" spellcheck="false" aria-label="Search worlds, buildings and flows" aria-controls="search-results">
+      <div id="search-results" class="results" role="listbox" hidden></div>
+    </div>
     <div class="me">
       <div class="xp" title="Experience">
         <span id="lvl"></span>
@@ -73,6 +77,7 @@
 <script src="js/ui-notes.js"></script>
 <script src="js/ui-sync.js"></script>
 <script src="js/ui-init.js"></script>
+<script src="js/ui-search.js"></script>
 <script src="js/main.js"></script>
 <!--/CW:SCRIPTS-->
 </body>

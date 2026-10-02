@@ -27,7 +27,10 @@
         text: 'You will be handed real cases. Carry each one through the code and pick the road the code would take.'
           + ' A guide at the top always tells you the next move.',
       }),
-      el('button', { class: 'btn primary', text: 'Start the journey', onclick: start }));
+      el('div', { class: 'row' },
+        el('button', { class: 'btn primary', text: 'Start the journey', onclick: start }),
+        el('button', { class: 'btn', text: 'Something is broken — find it', onclick: () => { start(); U.focusSearch(); } })),
+      el('p', { class: 'sub2', text: 'In a hurry? Search for the logic you need and jump straight in. Press / any time.' }));
     i.append(box);
   };
 

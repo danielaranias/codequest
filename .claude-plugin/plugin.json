@@ -1,7 +1,7 @@
 {
   "name": "codequest",
-  "version": "1.0.0",
-  "description": "Turn any codebase into a game you explore until you understand it: a journey of worlds, missions, guardrails and agents, kept in sync with the code and powered by your own coding agent.",
+  "version": "1.1.0",
+  "description": "Take back control of a codebase the AI wrote: turn it into a game you can search, walk through and challenge. Works with Claude Code and Codex.",
   "homepage": "https://github.com/danielaranias/codequest",
   "repository": "https://github.com/danielaranias/codequest",
   "keywords": [

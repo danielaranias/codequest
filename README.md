@@ -1,5 +1,5 @@
 <h1 align="center">CodeQuest</h1>
-<p align="center"><b>Turn any codebase into a game you play until you understand it.</b></p>
+<p align="center"><b>The AI keeps guessing. Take back control of your codebase — by playing it.</b></p>
 
 <p align="center">
   <a href="https://github.com/danielaranias/codequest/actions/workflows/ci.yml"><img src="https://github.com/danielaranias/codequest/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
@@ -9,24 +9,30 @@
   <img src="https://img.shields.io/badge/runs-on%20your%20machine-orange" alt="local">
 </p>
 
-<p align="center"><img src="docs/media/hero.gif" alt="A CodeQuest mission: carrying a case through the code and choosing a road at a fork" width="720"></p>
+<p align="center"><img src="docs/media/hero.gif" alt="Predicting which road the code takes at a fork, getting it wrong, and seeing why" width="720"></p>
 
-Reading a new codebase is slow and you never know if you really got it. CodeQuest has your
-coding agent map the repo into **worlds**, in the order the real system runs. Then you play:
+You asked the AI to fix it. It said "Fixed!". It is still broken. You explained again. "You're
+absolutely right — fixed now!" Still broken.
 
-- **Missions.** You are handed one real case. Carry it through the code and, at every fork,
-  pick the road the code would really take. Three hearts. Up to three stars.
-- **Worlds unlock in order.** Clear a world and the next one comes out of the fog.
+At that point you want to take control. But the codebase the AI wrote is overwhelming.
+
+**CodeQuest turns your codebase into a game, so you can understand it and take back control.**
+Your coding agent maps the repo into worlds, in the order the real system runs. Then:
+
+- **Go straight to what is broken.** Search for the logic (press `/`) and jump in. No unlocking first.
+- **See how it really runs.** Follow one real case through the code. At every fork, predict the
+  road the code takes. Wrong? You see the exact condition you missed.
+- **Drop in the case that fails.** In the lab, inject your own case or change a flow and watch what breaks.
+- **Tell the AI exactly what to fix.** Claim something is wrong; the agent checks it against the real
+  code, and a confirmed claim becomes a ready-made task on a separate branch.
 - **See what the user sees.** A small screen beside the map shows the UI at each step.
-- **The lab.** Inject your own case, change a flow and watch what breaks, or run the change
-  for real against your tests in a throwaway branch.
-- **Ask and challenge.** Every building is pinned to real lines. Ask about it, or claim it is
-  wrong and let the agent check.
-- **It stays honest.** When code changes, that part of the map goes under fog until it is re-mapped.
+- **It stays honest.** Every building is pinned to real lines. Code changed? That part goes under fog.
 
-| The journey | A fork | Delivered |
+Not in a hurry? Play it as a journey: clear a world, and the next one comes out of the fog.
+
+| Search and jump in | Predict the road | Straight to the lab |
 |---|---|---|
-| ![worlds in journey order](docs/media/journey.png) | ![choosing a road](docs/media/fork.png) | ![mission won](docs/media/won.png) |
+| ![search finds logic in any world](docs/media/search.png) | ![choosing a road at a fork](docs/media/fork.png) | ![the lab of a flow you jumped into](docs/media/jump.png) |
 
 ## Install
 
@@ -54,6 +60,7 @@ npx -y github:danielaranias/codequest doctor
 ## Play
 
 In any repo, tell your agent: *"map this repo into CodeQuest"*, then *"play CodeQuest"*.
+On the first screen pick **Start the journey**, or **Something is broken — find it** to search and jump in.
 In Claude Code these are commands:
 
 ```
@@ -63,7 +70,7 @@ In Claude Code these are commands:
 /codequest:export   one shareable HTML snapshot
 ```
 
-Controls: arrows/WASD or click · **E** land / look · **1–9** or walk into a signpost to choose a road ·
+Controls: **/** search and jump · arrows/WASD or click · **E** land / look · **1–9** or walk into a signpost to choose a road ·
 **Space** continue · **Q** quests · **N** notes & tasks · **M** back to sea · **Esc** quit a mission.
 
 **Try it now, no install:** open [`examples/claude-quickstarts/codequest.html`](examples/claude-quickstarts/codequest.html)
@@ -98,7 +105,7 @@ or once in `~/.config/codequest/config.json`:
 
 ## Status
 
-Version 1.0. Tried so far on two codebases with Claude Code on Linux and macOS. The Codex
+Version 1.1. Tried so far on two codebases with Claude Code on Linux and macOS. The Codex
 adapter and Windows are experimental. Issues with "the mapper got this wrong" are the most useful ones.
 
 ## Contributing

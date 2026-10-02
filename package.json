@@ -1,7 +1,7 @@
 {
   "name": "codequest",
-  "version": "1.0.0",
-  "description": "Turn any codebase into a game you explore until you understand it.",
+  "version": "1.1.0",
+  "description": "Take back control of a codebase the AI wrote: turn it into a game you can search, walk through and challenge. Works with Claude Code and Codex.",
   "type": "module",
   "bin": {
     "codequest": "scripts/codequest.mjs"

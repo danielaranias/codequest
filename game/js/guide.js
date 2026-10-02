@@ -7,7 +7,7 @@
   const { $, el } = CW;
   const Gd = (CW.guide = {});
 
-  G.novice = () => !Object.keys(G.state.missions).length && !G.state.freeRoam;
+  G.novice = () => !Object.keys(G.state.missions).length && !G.state.freeRoam && !Object.keys(G.state.opened || {}).length;
 
   // The world the player should be in next: first open world that is not cleared yet.
   G.nextWorld = function () {

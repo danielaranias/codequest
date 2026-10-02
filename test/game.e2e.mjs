@@ -58,7 +58,13 @@ const game = (page) => page.evaluate(() => {
       signs: m.signs.map((s) => ({ to: s.to, dead: s.dead })) },
   };
 });
-const land = async (page, wid) => { await page.evaluate((id) => window.__codequest.land(id), wid); return game(page); };
+// Landing the usual way. A locked world asks "jump in?" — here the player says no, so the order still holds.
+const land = async (page, wid) => {
+  await page.evaluate((id) => window.__codequest.land(id), wid);
+  const cancel = page.getByRole('button', { name: 'Cancel' });
+  if (await cancel.isVisible()) await cancel.click();
+  return game(page);
+};
 
 // Press a button that starts a mission ("Start" on the board, "Next mission" after a win),
 // then walk the player to the first building of that mission.
@@ -192,6 +198,82 @@ test('the next world opens only when every flow of this one has a beaten mission
     assert.equal(g.mission.flow, 'h');
     g = await playRight(page, 'two');
     assert.deepEqual(g.missions, { 'one/f/c1': 3, 'one/g/c1': 3, 'two/h/c1': 3 });
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+// ---------- search and jump: for the player who is stuck on one piece of logic ----------
+
+test('searching finds logic by its words, in locked worlds too, and says they are locked', { skip }, async () => {
+  const { page, errors, close } = await openGame();
+  try {
+    await page.keyboard.press('/');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'search', '/ puts the cursor in the search box');
+    const flow = map.two.flows[0];
+    await page.keyboard.type(flow.name.split(' ')[0]);
+    const row = page.locator('#search-results .res', { hasText: flow.name });
+    await row.waitFor(WAIT);
+    assert.match(await row.textContent(), /locked/, 'world two is still locked for a new player');
+    // a word that only appears inside a step, not in any name, still finds its flow
+    const word = map.one.flows[0].steps[0].action.split(' ').find((w) => w.length > 4);
+    const found = await page.evaluate((w) => window.CW.ui.search(w).map((r) => r.type + ':' + r.id), word.replace(/\W/g, ''));
+    assert.ok(found.includes('flow:' + map.one.flows[0].id), `"${word}" finds the flow it is a step of (${found})`);
+    assert.deepEqual(await page.evaluate(() => window.CW.ui.search('zzqqxx')), [], 'nonsense finds nothing');
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('picking a result in a locked world jumps straight in: world open, lab open, no mission beaten', { skip }, async () => {
+  const { page, errors, close } = await openGame();
+  try {
+    assert.equal((await game(page)).unlocked.two, false);
+    const flow = map.two.flows[0];
+    await page.keyboard.press('/');
+    await page.keyboard.type(flow.name);
+    await page.locator('#search-results .res', { hasText: flow.name }).first().click();
+    await page.waitForFunction(() => window.__codequest.scene === 'world' && window.__codequest.wid === 'two', null, WAIT);
+    const s = await page.evaluate(() => {
+      const G = window.__codequest, w = G.world();
+      return { lab: G.lab, flowSel: G.flowSel, labOpen: G.labOpen(w, w.flows[0]), unlocked: G.unlocked(w), missions: Object.keys(G.state.missions).length,
+        xpFromStars: G.worldStars(w).got, seen: w.entities.every((e) => G.isSeen(w.id, e.id)), novice: G.novice() };
+    });
+    assert.deepEqual(s, { lab: true, flowSel: flow.id, labOpen: true, unlocked: true, missions: 0, xpFromStars: 0, seen: true, novice: false });
+    // it survives a reload, and world one is still not "cleared" by it
+    await page.waitForFunction(() => Object.keys(localStorage).some((k) => /"opened":\{"two"/.test(localStorage.getItem(k) || '')), null, WAIT);
+    await page.reload();
+    await page.waitForFunction(() => window.__codequest && window.__codequest.W, null, WAIT);
+    const after = await page.evaluate(() => { const G = window.__codequest; return { two: G.unlocked(G.worldById('two')), oneCleared: G.worldCleared(G.worldById('one')) }; });
+    assert.deepEqual(after, { two: true, oneCleared: false });
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('a locked island asks before it opens, and Cancel keeps it locked', { skip }, async () => {
+  const { page, errors, close } = await openGame();
+  try {
+    await page.evaluate(() => window.__codequest.land('two'));
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    let s = await game(page);
+    assert.equal(s.scene, 'over'); assert.equal(s.unlocked.two, false);
+    await page.evaluate(() => window.__codequest.land('two'));
+    await page.getByRole('button', { name: 'Jump in' }).click();
+    await page.waitForFunction(() => window.__codequest.scene === 'world', null, WAIT);
+    s = await game(page);
+    assert.equal(s.wid, 'two'); assert.equal(s.unlocked.two, true);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+test('searching a building opens its panel on the spot', { skip }, async () => {
+  const { page, errors, close } = await openGame();
+  try {
+    const en = map.one.entities[1];
+    await page.keyboard.press('/');
+    await page.keyboard.type(en.name);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__codequest.scene === 'world', null, WAIT);
+    const s = await page.evaluate(() => ({ sel: window.__codequest.selected, drawer: !document.querySelector('#drawer').hidden, text: document.querySelector('#drawer').textContent }));
+    assert.equal(s.sel, en.id); assert.ok(s.drawer); assert.ok(s.text.includes(en.name));
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

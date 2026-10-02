@@ -12,7 +12,7 @@ export function defaultAgent() {
 }
 
 // Claude Code permission rule for "anything under this directory": Read(//abs/path/**)
-// Windows paths are written the POSIX way in rules: C:\\Users\\ann\\repo -> //c/Users/ann/repo/**
+// Windows paths are written the POSIX way in rules: C:\\work\\repo -> //c/work/repo/**
 export function ruleFor(absPath) {
   const p = String(absPath).replace(/\\/g, '/').replace(/\/+$/, '');
   const drive = /^([A-Za-z]):(\/.*)?$/.exec(p);

@@ -1,0 +1,33 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
+      - run: node scripts/codequest.mjs validate test/fixture
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Playwright is a test tool only: installed here, never added to package.json.
+      - run: npm i --no-save playwright@1
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          CODEQUEST_E2E_REQUIRED: '1'

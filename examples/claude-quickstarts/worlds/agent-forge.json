@@ -1,0 +1,1727 @@
+{
+  "id": "agent-forge",
+  "name": "agents",
+  "theme": "volcano",
+  "tagline": "Where a question goes round the model-and-tools loop until Claude stops asking for tools",
+  "summary": "A small teaching example of an LLM agent. The Agent sends the chat history to Claude, runs any tools Claude asks for, adds the results to the history and calls Claude again, until a reply has no tool calls. It can also plug in tools from MCP servers, and it trims old history when the token count gets too high.",
+  "paths": [
+    "agents/"
+  ],
+  "districts": [
+    {
+      "id": "gate",
+      "name": "Start-up gate"
+    },
+    {
+      "id": "core",
+      "name": "Loop core"
+    },
+    {
+      "id": "memory",
+      "name": "History vault"
+    },
+    {
+      "id": "tools",
+      "name": "Tool shrines"
+    },
+    {
+      "id": "beyond",
+      "name": "Outside services"
+    }
+  ],
+  "entities": [
+    {
+      "id": "run-entry",
+      "kind": "entry",
+      "name": "agent.run / run_async",
+      "district": "gate",
+      "summary": "The front door. You call run() with a question; it connects MCP servers, runs the loop, and returns Claude's last reply.",
+      "details": "- run() just wraps run_async() in asyncio.run()\n- run_async() opens an AsyncExitStack so MCP connections close at the end\n- MCP tools are added to self.tools only for this run\n- A finally block puts the original tool list back, even on errors",
+      "source": [
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            157,
+            173
+          ],
+          "anchor": "async def run_async(self, user_input: str)"
+        }
+      ]
+    },
+    {
+      "id": "model-config",
+      "kind": "config",
+      "name": "ModelConfig and system prompt",
+      "district": "gate",
+      "summary": "The settings for each Claude call: model name, max_tokens, temperature, context window size, plus the system prompt string the caller passes in.",
+      "details": "- Defaults: claude-sonnet-4-20250514, max_tokens 4096, temperature 1.0\n- context_window_tokens 180000 is the trim limit for history\n- The system prompt is just a string given to Agent(...)\n- API key comes from ANTHROPIC_API_KEY, empty string if missing",
+      "source": [
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            17,
+            30
+          ],
+          "anchor": "class ModelConfig:"
+        },
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            60,
+            69
+          ],
+          "anchor": "api_key=os.environ.get(\"ANTHROPIC_API_KEY\", \"\")"
+        }
+      ]
+    },
+    {
+      "id": "mcp-config-check",
+      "kind": "guardrail",
+      "name": "MCP config check",
+      "district": "gate",
+      "summary": "Looks at each MCP server config and refuses ones that cannot work, before any connection is tried.",
+      "details": "- type defaults to stdio\n- stdio needs a command, sse needs a url\n- Any other type is rejected\n- The ValueError is caught one level up, so the server is skipped, not fatal",
+      "source": [
+        {
+          "file": "agents/utils/connections.py",
+          "lines": [
+            93,
+            114
+          ],
+          "anchor": "raise ValueError(\"Command is required for STDIO connections\")"
+        }
+      ],
+      "guard": {
+        "rule": "An MCP server config must have a known type and the field that type needs",
+        "checks": "type is stdio (needs command) or sse (needs url)",
+        "onFail": "ValueError is raised, printed as 'Error setting up MCP server', and that server is skipped"
+      }
+    },
+    {
+      "id": "mcp-connector",
+      "kind": "module",
+      "name": "MCP connector",
+      "district": "gate",
+      "summary": "Opens a session to each MCP server, asks it for its tool list, and turns each tool into an MCPTool the agent can call.",
+      "details": "- One connection per server config, kept open on the exit stack\n- Connects, runs session.initialize(), then list_tools()\n- Any error for one server is printed and that server is skipped\n- Prints how many MCP tools were loaded",
+      "source": [
+        {
+          "file": "agents/utils/connections.py",
+          "lines": [
+            117,
+            150
+          ],
+          "anchor": "async def setup_mcp_connections("
+        },
+        {
+          "file": "agents/utils/connections.py",
+          "lines": [
+            26,
+            34
+          ],
+          "anchor": "async def __aenter__(self):"
+        }
+      ]
+    },
+    {
+      "id": "forge-agent",
+      "kind": "agent",
+      "name": "The Agent",
+      "district": "core",
+      "summary": "The loop itself. Calls Claude, saves the reply, runs any tool calls, adds the results, and goes again until Claude answers without tools.",
+      "details": "- Adds the user's text to history first\n- Each pass: trim history, build params, call Claude\n- Only blocks with type 'tool_use' are run locally\n- No tool calls in the reply means done: the whole response is returned\n- There is no limit on the number of passes",
+      "source": [
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            96,
+            155
+          ],
+          "anchor": "async def _agent_loop(self, user_input: str)"
+        },
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            33,
+            75
+          ],
+          "anchor": "class Agent:"
+        }
+      ],
+      "agent": {
+        "role": "Answers a user question by calling Claude and running the tools Claude asks for, in a loop",
+        "model": "claude-sonnet-4-20250514",
+        "tools": [
+          "file-read-tool",
+          "file-write-tool",
+          "think-tool",
+          "server-tools",
+          "mcp-tool"
+        ],
+        "prompt": "model-config"
+      }
+    },
+    {
+      "id": "param-builder",
+      "kind": "module",
+      "name": "Request builder",
+      "district": "core",
+      "summary": "Builds the arguments for each Claude call from the config, history and tools, then lets message_params override anything.",
+      "details": "- Starts from model, max_tokens, temperature, system, messages, tools\n- **self.message_params goes last, so it wins on any clash\n- Adds a default anthropic-beta header for code execution\n- Custom extra_headers are merged on top and can replace that beta header",
+      "source": [
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            80,
+            94
+          ],
+          "anchor": "**self.message_params,"
+        },
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            108,
+            120
+          ],
+          "anchor": "default_headers = {\"anthropic-beta\": \"code-execution-2025-05-22\"}"
+        }
+      ]
+    },
+    {
+      "id": "tool-runner",
+      "kind": "guardrail",
+      "name": "Tool runner",
+      "district": "core",
+      "summary": "Runs every tool call from one reply, in parallel, and makes sure a broken or unknown tool turns into an error message instead of a crash.",
+      "details": "- Looks the tool up by name in tool_dict\n- Unknown name -> \"Tool '...' not found\" with is_error\n- Any other exception -> 'Error executing tool: ...' with is_error\n- Results are str() of whatever the tool returned\n- Uses asyncio.gather, so calls run at the same time",
+      "source": [
+        {
+          "file": "agents/utils/tool_util.py",
+          "lines": [
+            7,
+            24
+          ],
+          "anchor": "async def _execute_single_tool("
+        },
+        {
+          "file": "agents/utils/tool_util.py",
+          "lines": [
+            27,
+            39
+          ],
+          "anchor": "return await asyncio.gather("
+        }
+      ],
+      "guard": {
+        "rule": "A failing or unknown tool must never crash the agent loop",
+        "checks": "tool name exists in tool_dict and execute() does not raise",
+        "onFail": "A tool_result with is_error=True and an error text is sent back to Claude"
+      }
+    },
+    {
+      "id": "message-history",
+      "kind": "store",
+      "name": "Message history",
+      "district": "memory",
+      "summary": "The list of chat messages sent to Claude each time, plus a running token count used to decide when to trim.",
+      "details": "- Starts the token count at the size of the system prompt (count_tokens, or length/4 if that fails)\n- Plain strings are wrapped as text blocks\n- Only assistant messages with usage update the token count\n- format_for_api marks the last message with cache_control for prompt caching",
+      "source": [
+        {
+          "file": "agents/utils/history_util.py",
+          "lines": [
+            6,
+            67
+          ],
+          "anchor": "class MessageHistory:"
+        },
+        {
+          "file": "agents/utils/history_util.py",
+          "lines": [
+            113,
+            124
+          ],
+          "anchor": "\"cache_control\": {\"type\": \"ephemeral\"}"
+        }
+      ]
+    },
+    {
+      "id": "context-trimmer",
+      "kind": "guardrail",
+      "name": "Context trimmer",
+      "district": "memory",
+      "summary": "Before each Claude call, drops the oldest messages two at a time while the tracked token count is over the window.",
+      "details": "- Does nothing if total_tokens <= context_window_tokens\n- Pops the two oldest messages and subtracts their recorded tokens\n- Replaces the new first message with '[Earlier history has been truncated.]'\n- Counts that notice as 25 tokens\n- Repeats while still over the limit",
+      "source": [
+        {
+          "file": "agents/utils/history_util.py",
+          "lines": [
+            69,
+            111
+          ],
+          "anchor": "def truncate(self) -> None:"
+        }
+      ],
+      "guard": {
+        "rule": "Tracked history must stay within context_window_tokens",
+        "checks": "self.total_tokens > self.context_window_tokens",
+        "onFail": "Oldest message pairs are removed and a truncation notice takes their place"
+      }
+    },
+    {
+      "id": "file-read-tool",
+      "kind": "skill",
+      "name": "file_read tool",
+      "district": "tools",
+      "summary": "Lets Claude read a file or list a folder on the local disk.",
+      "details": "- operation 'read' or 'list'\n- read: checks the path exists and is a file, max_lines 0 means whole file\n- list: glob with a pattern, default '*'\n- Errors come back as normal text like 'Error: File not found at ...'\n- No limit on which paths can be read",
+      "source": [
+        {
+          "file": "agents/tools/file_tools.py",
+          "lines": [
+            11,
+            135
+          ],
+          "anchor": "class FileReadTool(Tool):"
+        }
+      ]
+    },
+    {
+      "id": "file-write-tool",
+      "kind": "skill",
+      "name": "file_write tool",
+      "district": "tools",
+      "summary": "Lets Claude create, overwrite or edit files on the local disk.",
+      "details": "- write: needs non-empty content, creates missing parent folders\n- edit: needs old_text and new_text, old_text must be in the file\n- If old_text appears many times, all copies are replaced with a warning\n- No limit on which paths can be written",
+      "source": [
+        {
+          "file": "agents/tools/file_tools.py",
+          "lines": [
+            138,
+            277
+          ],
+          "anchor": "class FileWriteTool(Tool):"
+        }
+      ]
+    },
+    {
+      "id": "think-tool",
+      "kind": "skill",
+      "name": "think tool",
+      "district": "tools",
+      "summary": "A scratchpad tool. Claude writes a thought into it; the tool does nothing and replies 'Thinking complete!'.",
+      "details": "- The thought is only kept because it sits in the tool_use block in history\n- Gives Claude a place to reason between other tool calls",
+      "source": [
+        {
+          "file": "agents/tools/think.py",
+          "lines": [
+            6,
+            32
+          ],
+          "anchor": "return \"Thinking complete!\""
+        }
+      ]
+    },
+    {
+      "id": "server-tools",
+      "kind": "skill",
+      "name": "Server tools (web search, code execution)",
+      "district": "tools",
+      "summary": "Tools that Anthropic runs on its side. The agent only sends their description; it never runs them itself.",
+      "details": "- WebSearchServerTool can set max_uses, allowed/blocked domains, location\n- CodeExecutionServerTool needs the code-execution beta header\n- They have to_dict() but no execute()\n- Their blocks come back as server_tool_use, so the loop's 'tool_use' filter skips them",
+      "source": [
+        {
+          "file": "agents/tools/web_search.py",
+          "lines": [
+            7,
+            38
+          ],
+          "anchor": "type: str = \"web_search_20250305\""
+        },
+        {
+          "file": "agents/tools/code_execution.py",
+          "lines": [
+            7,
+            19
+          ],
+          "anchor": "type: str = \"code_execution_20250522\""
+        }
+      ]
+    },
+    {
+      "id": "mcp-tool",
+      "kind": "skill",
+      "name": "MCPTool wrapper",
+      "district": "tools",
+      "summary": "Makes a tool from an MCP server look like a normal local tool. Calling it forwards the arguments to the server.",
+      "details": "- Name, description and schema come from the server's list_tools\n- Returns the first text item of the result only\n- No text -> 'No text content in tool response'\n- Catches its own errors and returns them as text",
+      "source": [
+        {
+          "file": "agents/tools/mcp_tool.py",
+          "lines": [
+            8,
+            36
+          ],
+          "anchor": "class MCPTool(Tool):"
+        }
+      ]
+    },
+    {
+      "id": "anthropic-api",
+      "kind": "external",
+      "name": "Anthropic Messages API",
+      "district": "beyond",
+      "summary": "Claude itself. Called once per loop pass with messages.create, and once at start-up with count_tokens to size the system prompt.",
+      "details": "- messages.create is not wrapped in try/except, so its errors go straight up to the caller\n- count_tokens failure is caught and replaced by a rough length/4 guess\n- Returns usage numbers that feed the history token count",
+      "source": [
+        {
+          "file": "agents/agent.py",
+          "lines": [
+            117,
+            120
+          ],
+          "anchor": "response = self.client.messages.create("
+        },
+        {
+          "file": "agents/utils/history_util.py",
+          "lines": [
+            29,
+            40
+          ],
+          "anchor": "self.client.messages.count_tokens("
+        }
+      ]
+    },
+    {
+      "id": "mcp-servers",
+      "kind": "external",
+      "name": "MCP servers",
+      "district": "beyond",
+      "summary": "Separate programs that offer tools over MCP, reached by a local process (stdio) or over HTTP (SSE). A small calculator server is included.",
+      "details": "- stdio: the agent starts the command as a child process\n- sse: the agent connects to a URL with optional headers\n- calculator_mcp.py offers one 'calculator' tool with + - * / ^ sqrt",
+      "source": [
+        {
+          "file": "agents/tools/calculator_mcp.py",
+          "lines": [
+            9,
+            55
+          ],
+          "anchor": "@mcp.tool(name=\"calculator\")"
+        },
+        {
+          "file": "agents/utils/connections.py",
+          "lines": [
+            62,
+            90
+          ],
+          "anchor": "class MCPConnectionStdio(MCPConnection):"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "agent-loop",
+      "name": "One question through the loop",
+      "trigger": "Code calls agent.run(\"...\")",
+      "summary": "The question is added to history, then the agent keeps calling Claude and running tools until a reply has no tool calls.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "run-entry",
+          "action": "Starts the async run, loads MCP tools, then enters the loop",
+          "carries": "user_input: 'What is 17 * 23?'",
+          "source": {
+            "file": "agents/agent.py",
+            "lines": [
+              157,
+              173
+            ],
+            "anchor": "return await self._agent_loop(user_input)"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "text",
+                "text": "agent.run(\"<the question>\")"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Agent initialized"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "No screen of its own: these lines are printed only when verbose=True.",
+                "state": "muted"
+              }
+            ],
+            "note": "The script calls run(); the only line so far is the one printed when the agent was created."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "message-history",
+          "action": "Adds the question as a user text message",
+          "carries": "{ role: 'user', content: [{ type: 'text', text: 'What is 17 * 23?' }] }",
+          "next": [
+            {
+              "to": "s3",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "agent.run() with verbose=True"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Agent initialized"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Received: <the question>"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "A \"Received\" line with the question appears."
+          }
+        },
+        {
+          "id": "s3",
+          "at": "context-trimmer",
+          "action": "Trims old messages if the token count is over the window",
+          "source": {
+            "file": "agents/agent.py",
+            "lines": [
+              104,
+              106
+            ],
+            "anchor": "self.history.truncate()"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "param-builder",
+          "action": "Builds model, system, messages, tools and headers for the call",
+          "carries": "{ model, max_tokens: 4096, messages: [...], tools: [...], extra_headers }",
+          "next": [
+            {
+              "to": "s5",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s5",
+          "at": "anthropic-api",
+          "action": "Sends the request to Claude",
+          "next": [
+            {
+              "to": "s6",
+              "when": "Claude replies"
+            },
+            {
+              "to": "outcome:api-error",
+              "when": "the API raises (bad key, rate limit, request too big)"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "forge-agent",
+          "action": "Saves the reply in history and picks out the tool_use blocks",
+          "carries": "response.content, response.usage",
+          "source": {
+            "file": "agents/agent.py",
+            "lines": [
+              121,
+              142
+            ],
+            "anchor": "if tool_calls:"
+          },
+          "next": [
+            {
+              "to": "s7",
+              "when": "reply has tool_use blocks"
+            },
+            {
+              "to": "outcome:answered",
+              "when": "reply has no tool_use blocks"
+            }
+          ],
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "agent.run() with verbose=True"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Received: <the question>",
+                  "[<agent name>] Output: <Claude's text>",
+                  "[<agent name>] Tool call: <tool name>(<key>=<value>, <key>=<value>)"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "One line per block in the reply. A \"Tool call\" line shows up only if Claude asked for a tool.",
+                "state": "muted"
+              }
+            ],
+            "note": "Claude's reply is printed: its text, and any tool it wants to use."
+          }
+        },
+        {
+          "id": "s7",
+          "at": "tool-runner",
+          "action": "Runs all requested tools in parallel",
+          "carries": "[{ name: 'calculator', input: { number1: 17, number2: 23, operator: '*' } }]",
+          "next": [
+            {
+              "to": "s8",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s8",
+          "at": "message-history",
+          "action": "Adds the tool results as one user message, then loops back",
+          "carries": "[{ type: 'tool_result', tool_use_id, content: 'Result: 391' }]",
+          "next": [
+            {
+              "to": "s3",
+              "when": "always (next pass)"
+            }
+          ],
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "agent.run() with verbose=True"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Tool call: <tool name>(<key>=<value>, <key>=<value>)"
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Tool result: <the tool's text>"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "A \"Tool result\" line appears for each tool that ran."
+          }
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "answered",
+          "label": "Claude's final reply is returned",
+          "kind": "success",
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "agent.run() with verbose=True"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Received: <the question>",
+                  "[<agent name>] Output: <Claude's final answer>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "run() hands the reply object back to the calling code.",
+                "state": "ok"
+              }
+            ],
+            "note": "The last \"Output\" line is the answer; nothing else is printed."
+          }
+        },
+        {
+          "id": "api-error",
+          "label": "API error escapes to the caller",
+          "kind": "error",
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Received: <the question>"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "<the SDK's exception and Python traceback>",
+                "state": "error"
+              },
+              {
+                "t": "text",
+                "text": "The library prints no message of its own for this.",
+                "state": "muted"
+              }
+            ],
+            "note": "The program stops with a raw Python error; there is no \"Output\" line."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Plain question, no tools needed",
+          "input": "agent with think tool, user asks 'Say hi'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "outcome": "answered",
+          "explain": "Claude answers with text only, so tool_calls is empty and the response is returned on the first pass.",
+          "brief": "An agent with one simple tool is asked to just say hi.",
+          "facts": [
+            "API key set",
+            "has a think tool",
+            "question needs no tool"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Question that needs the calculator",
+          "input": "calculator MCP server attached, user asks 'What is 17 * 23?'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s3",
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "outcome": "answered",
+          "explain": "First reply asks for the calculator, the result 'Result: 391' is added, and the second reply has no tool calls.",
+          "brief": "An agent with a calculator is asked to multiply two numbers.",
+          "facts": [
+            "API key set",
+            "calculator attached",
+            "question needs a tool"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "No API key set",
+          "input": "ANTHROPIC_API_KEY missing, user asks anything",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5"
+          ],
+          "outcome": "api-error",
+          "explain": "The client was built with an empty key. messages.create raises an auth error and nothing in the loop catches it.",
+          "brief": "Someone asks the agent a question but never set an API key.",
+          "facts": [
+            "API key missing",
+            "any question"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tool-call",
+      "name": "Claude asks to read a file",
+      "trigger": "A Claude reply contains a tool_use block",
+      "summary": "One tool call is looked up, run, and wrapped as a tool_result. Errors become messages for Claude, not crashes.",
+      "start": "t1",
+      "steps": [
+        {
+          "id": "t1",
+          "at": "forge-agent",
+          "action": "Collects tool_use blocks and has tool_dict ready (name -> tool)",
+          "carries": "{ id: 'toolu_1', name: 'file_read', input: { operation: 'read', path: 'notes.txt' } }",
+          "next": [
+            {
+              "to": "t2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "agent.run() with verbose=True"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Tool call: file_read(operation=read, path=<file path>)"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "Printed only when verbose=True.",
+                "state": "muted"
+              }
+            ],
+            "note": "The tool Claude asked for is printed with its inputs."
+          }
+        },
+        {
+          "id": "t2",
+          "at": "tool-runner",
+          "action": "Looks up tool_dict[call.name] and calls execute(**call.input)",
+          "source": {
+            "file": "agents/utils/tool_util.py",
+            "lines": [
+              11,
+              16
+            ],
+            "anchor": "result = await tool_dict[call.name].execute(**call.input)"
+          },
+          "next": [
+            {
+              "to": "t3",
+              "when": "name is in tool_dict"
+            },
+            {
+              "to": "t6",
+              "when": "name is not in tool_dict (KeyError)"
+            }
+          ]
+        },
+        {
+          "id": "t3",
+          "at": "file-read-tool",
+          "action": "Checks the path exists and is a file",
+          "next": [
+            {
+              "to": "t4",
+              "when": "file exists"
+            },
+            {
+              "to": "t5",
+              "when": "path missing or is a folder"
+            }
+          ]
+        },
+        {
+          "id": "t4",
+          "at": "file-read-tool",
+          "action": "Reads the file in a thread, up to max_lines (0 = all)",
+          "carries": "file text",
+          "next": [
+            {
+              "to": "t7",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "t5",
+          "at": "file-read-tool",
+          "action": "Returns an error string as a normal result",
+          "carries": "'Error: File not found at notes.txt'",
+          "source": {
+            "file": "agents/tools/file_tools.py",
+            "lines": [
+              84,
+              87
+            ],
+            "anchor": "return f\"Error: File not found at {path}\""
+          },
+          "next": [
+            {
+              "to": "t7",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "t6",
+          "at": "tool-runner",
+          "action": "Builds an error result: tool not found, is_error=True",
+          "carries": "{ content: \"Tool 'bash' not found\", is_error: true }",
+          "next": [
+            {
+              "to": "t8",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "t7",
+          "at": "tool-runner",
+          "action": "Puts str(result) into a tool_result with the matching tool_use_id",
+          "carries": "{ type: 'tool_result', tool_use_id: 'toolu_1', content: '...' }",
+          "next": [
+            {
+              "to": "t8",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "t8",
+          "at": "message-history",
+          "action": "Tool results are added as the next user message",
+          "next": [
+            {
+              "to": "outcome:result-sent",
+              "when": "is_error not set"
+            },
+            {
+              "to": "outcome:error-sent",
+              "when": "is_error is true"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "result-sent",
+          "label": "Plain result goes back to Claude",
+          "kind": "success",
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "agent.run() with verbose=True"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Tool call: file_read(operation=read, path=<file path>)",
+                  "[<agent name>] Tool result: <the tool's text>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "The text can be the file content or a line like \"Error: File not found at <file path>\". Both print the same way.",
+                "state": "muted"
+              }
+            ],
+            "note": "A plain \"Tool result\" line appears with whatever text the tool returned."
+          }
+        },
+        {
+          "id": "error-sent",
+          "label": "Flagged error (is_error) goes back to Claude",
+          "kind": "error",
+          "screen": {
+            "name": "agent.run() with verbose=True",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "agent.run() with verbose=True"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Tool call: <tool name>(<key>=<value>)",
+                  "[<agent name>] Tool result: Tool '<tool name>' not found"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "Only the text is printed; the error flag itself is not shown.",
+                "state": "muted"
+              }
+            ],
+            "note": "The \"Tool result\" line says the tool was not found."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Read a file that exists",
+          "input": "file_read { operation: 'read', path: 'README.md' }",
+          "path": [
+            "t1",
+            "t2",
+            "t3",
+            "t4",
+            "t7",
+            "t8"
+          ],
+          "outcome": "result-sent",
+          "explain": "The tool is found, the file is read, and its text is sent back as a normal tool_result.",
+          "brief": "Claude asks to read a file that is there.",
+          "facts": [
+            "tool: file_read",
+            "tool is registered",
+            "file exists"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Read a file that is missing",
+          "input": "file_read { operation: 'read', path: 'nope.txt' }",
+          "path": [
+            "t1",
+            "t2",
+            "t3",
+            "t5",
+            "t7",
+            "t8"
+          ],
+          "outcome": "result-sent",
+          "explain": "file_read catches the problem itself and returns 'Error: File not found...' as plain text, so is_error is never set.",
+          "brief": "Claude asks to read a file that is not there.",
+          "facts": [
+            "tool: file_read",
+            "tool is registered",
+            "file is missing"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Claude calls a tool that does not exist",
+          "input": "tool_use { name: 'bash', input: { cmd: 'ls' } }",
+          "path": [
+            "t1",
+            "t2",
+            "t6",
+            "t8"
+          ],
+          "outcome": "error-sent",
+          "explain": "tool_dict['bash'] raises KeyError, which the runner turns into \"Tool 'bash' not found\" with is_error=True.",
+          "brief": "Claude asks for a tool this agent was never given.",
+          "facts": [
+            "tool: bash",
+            "bash is not registered"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history-truncation",
+      "name": "History gets too long",
+      "trigger": "Start of every loop pass, before calling Claude",
+      "summary": "If the tracked token count is above the window, the oldest messages are dropped two at a time and a short notice takes their place.",
+      "start": "h1",
+      "steps": [
+        {
+          "id": "h1",
+          "at": "forge-agent",
+          "action": "Calls history.truncate() before building the request",
+          "next": [
+            {
+              "to": "h2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "MessageHistory.truncate()",
+            "kind": "none",
+            "blocks": [],
+            "note": "Nothing is printed or shown: trimming happens silently, even with verbose=True."
+          }
+        },
+        {
+          "id": "h2",
+          "at": "context-trimmer",
+          "action": "Compares total_tokens to context_window_tokens",
+          "source": {
+            "file": "agents/utils/history_util.py",
+            "lines": [
+              69,
+              72
+            ],
+            "anchor": "if self.total_tokens <= self.context_window_tokens:"
+          },
+          "next": [
+            {
+              "to": "outcome:untouched",
+              "when": "total_tokens <= window"
+            },
+            {
+              "to": "h3",
+              "when": "total_tokens > window"
+            }
+          ]
+        },
+        {
+          "id": "h3",
+          "at": "context-trimmer",
+          "action": "Pops the two oldest messages and subtracts the oldest token record",
+          "carries": "total_tokens -= input + output of record[0]",
+          "next": [
+            {
+              "to": "h4",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "h4",
+          "at": "context-trimmer",
+          "action": "Overwrites the new first message with the truncation notice and books it as 25 input tokens",
+          "carries": "'[Earlier history has been truncated.]'",
+          "next": [
+            {
+              "to": "h5",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "h5",
+          "at": "context-trimmer",
+          "action": "Checks the while condition again",
+          "source": {
+            "file": "agents/utils/history_util.py",
+            "lines": [
+              93,
+              98
+            ],
+            "anchor": "and self.total_tokens > self.context_window_tokens"
+          },
+          "next": [
+            {
+              "to": "h3",
+              "when": "still over window, 2+ messages and token records left"
+            },
+            {
+              "to": "h6",
+              "when": "under window or nothing left to drop"
+            }
+          ]
+        },
+        {
+          "id": "h6",
+          "at": "message-history",
+          "action": "format_for_api sends the shorter list, last message marked for caching",
+          "next": [
+            {
+              "to": "outcome:trimmed",
+              "when": "always"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "untouched",
+          "label": "History sent as is",
+          "kind": "success",
+          "screen": {
+            "name": "MessageHistory.truncate()",
+            "kind": "none",
+            "blocks": [],
+            "note": "Nothing is shown; the whole chat is sent as it is."
+          }
+        },
+        {
+          "id": "trimmed",
+          "label": "Oldest messages dropped, notice added",
+          "kind": "blocked",
+          "screen": {
+            "name": "MessageHistory.truncate()",
+            "kind": "none",
+            "blocks": [],
+            "note": "Nothing is shown; old messages are gone and Claude sees \"[Earlier history has been truncated.]\" in their place."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Short chat",
+          "input": "total_tokens = 12,000, window = 180,000",
+          "path": [
+            "h1",
+            "h2"
+          ],
+          "outcome": "untouched",
+          "explain": "12,000 is under 180,000, so truncate() returns right away.",
+          "brief": "A short chat is about to be sent to Claude.",
+          "facts": [
+            "12,000 tokens used",
+            "window 180,000"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Just over the limit",
+          "input": "total_tokens = 181,000; records (12,000 in, 800 out), (5,000 in, 300 out), ...",
+          "path": [
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6"
+          ],
+          "outcome": "trimmed",
+          "explain": "181,000 - 12,800 = 168,200, then the next record is reset to 25 input: 168,200 + 25 - 5,000 = 163,225, which is under the window, so one round is enough.",
+          "brief": "The chat has grown a little past what fits.",
+          "facts": [
+            "181,000 tokens used",
+            "window 180,000",
+            "turn 1: 12,000 in, 800 out",
+            "turn 2: 5,000 in, 300 out"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Well over the limit",
+          "input": "total_tokens = 200,000; records (8,000, 500), (6,000, 400), (7,000, 600), ...",
+          "path": [
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h3",
+            "h4",
+            "h5",
+            "h6"
+          ],
+          "outcome": "trimmed",
+          "explain": "Round 1: 200,000 - 8,500 + 25 - 6,000 = 185,525, still over. Round 2: - 425 + 25 - 7,000 = 178,125, under the window.",
+          "brief": "The chat has grown far past what fits.",
+          "facts": [
+            "200,000 tokens used",
+            "window 180,000",
+            "turn 1: 8,000 in, 500 out",
+            "turn 2: 6,000 in, 400 out",
+            "turn 3: 7,000 in, 600 out"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mcp-setup",
+      "name": "Connecting MCP servers at start",
+      "trigger": "run_async() begins, with mcp_servers given to Agent(...)",
+      "summary": "Each server config is checked, connected, and its tools wrapped. A broken server is printed and skipped; the agent still runs.",
+      "start": "m1",
+      "steps": [
+        {
+          "id": "m1",
+          "at": "mcp-connector",
+          "action": "setup_mcp_connections gets the server list",
+          "next": [
+            {
+              "to": "m6",
+              "when": "mcp_servers is empty"
+            },
+            {
+              "to": "m2",
+              "when": "there are server configs"
+            }
+          ],
+          "screen": {
+            "name": "setup_mcp_connections()",
+            "kind": "none",
+            "blocks": [],
+            "note": "Nothing is printed while the server list is read."
+          }
+        },
+        {
+          "id": "m2",
+          "at": "mcp-config-check",
+          "action": "Checks type and required field (command or url)",
+          "carries": "{ type: 'stdio', command: 'python', args: ['calculator_mcp.py'] }",
+          "next": [
+            {
+              "to": "m3",
+              "when": "config is valid"
+            },
+            {
+              "to": "m5",
+              "when": "missing command/url or unknown type (ValueError)"
+            }
+          ]
+        },
+        {
+          "id": "m3",
+          "at": "mcp-servers",
+          "action": "Starts or reaches the server, opens a session, initializes, lists tools",
+          "next": [
+            {
+              "to": "m4",
+              "when": "server answers"
+            },
+            {
+              "to": "m5",
+              "when": "connection or list_tools fails"
+            }
+          ]
+        },
+        {
+          "id": "m4",
+          "at": "mcp-tool",
+          "action": "Wraps each listed tool as an MCPTool tied to this connection",
+          "carries": "MCPTool(name='calculator', input_schema={...})",
+          "next": [
+            {
+              "to": "m2",
+              "when": "more servers in the list"
+            },
+            {
+              "to": "m6",
+              "when": "that was the last server"
+            }
+          ]
+        },
+        {
+          "id": "m5",
+          "at": "mcp-connector",
+          "action": "Prints 'Error setting up MCP server ...' and moves on",
+          "source": {
+            "file": "agents/utils/connections.py",
+            "lines": [
+              144,
+              145
+            ],
+            "anchor": "print(f\"Error setting up MCP server {config}: {e}\")"
+          },
+          "next": [
+            {
+              "to": "m2",
+              "when": "more servers in the list"
+            },
+            {
+              "to": "m6",
+              "when": "that was the last server"
+            }
+          ],
+          "screen": {
+            "name": "setup_mcp_connections()",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "setup_mcp_connections()"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Error setting up MCP server <the server config>: <the error text>"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "The error text can be",
+                "items": [
+                  "Command is required for STDIO connections",
+                  "URL is required for SSE connections",
+                  "Unsupported connection type: <type>",
+                  "<an error from the server itself>"
+                ]
+              }
+            ],
+            "note": "One error line is printed for the broken server; the program keeps going."
+          }
+        },
+        {
+          "id": "m6",
+          "at": "run-entry",
+          "action": "Adds the MCP tools to self.tools for this run and starts the loop",
+          "next": [
+            {
+              "to": "outcome:ready",
+              "when": "no server was skipped"
+            },
+            {
+              "to": "outcome:ready-missing",
+              "when": "one or more servers were skipped"
+            }
+          ],
+          "screen": {
+            "name": "setup_mcp_connections()",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "setup_mcp_connections()"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Loaded <n> MCP tools from <n> servers."
+                ]
+              },
+              {
+                "t": "text",
+                "text": "This line is skipped when no servers were given at all.",
+                "state": "muted"
+              }
+            ],
+            "note": "A count of loaded tools is printed, then the loop starts."
+          }
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "ready",
+          "label": "Agent runs with all expected tools",
+          "kind": "success",
+          "screen": {
+            "name": "setup_mcp_connections()",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "setup_mcp_connections()"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Loaded <n> MCP tools from <n> servers.",
+                  "[<agent name>] Received: <the question>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "With no servers given, the \"Loaded\" line is not printed.",
+                "state": "muted"
+              }
+            ],
+            "note": "The agent starts on the question with every tool it expected."
+          }
+        },
+        {
+          "id": "ready-missing",
+          "label": "Agent runs without the broken server's tools",
+          "kind": "blocked",
+          "screen": {
+            "name": "setup_mcp_connections()",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "setup_mcp_connections()"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "Error setting up MCP server <the server config>: <the error text>",
+                  "Loaded <n> MCP tools from <n> servers."
+                ]
+              },
+              {
+                "t": "console",
+                "items": [
+                  "[<agent name>] Received: <the question>"
+                ],
+                "state": "active"
+              }
+            ],
+            "note": "An error line stays on screen, the count is lower, and the agent starts anyway."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "No MCP servers",
+          "input": "Agent(name='A', system='...', tools=[ThinkTool()])",
+          "path": [
+            "m1",
+            "m6"
+          ],
+          "outcome": "ready",
+          "explain": "setup_mcp_connections returns [] right away, so only the local tools are used.",
+          "brief": "An agent is started with one local tool and no outside servers.",
+          "facts": [
+            "no MCP servers",
+            "1 local tool"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Calculator server over stdio",
+          "input": "{ type: 'stdio', command: 'python', args: ['agents/tools/calculator_mcp.py'] }",
+          "path": [
+            "m1",
+            "m2",
+            "m3",
+            "m4",
+            "m6"
+          ],
+          "outcome": "ready",
+          "explain": "Config is valid, the server starts and lists 'calculator', which becomes an MCPTool.",
+          "brief": "An agent is started with a calculator server it must launch.",
+          "facts": [
+            "1 server, type stdio",
+            "command is given",
+            "server answers"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "SSE config with no url",
+          "input": "{ type: 'sse', headers: { Authorization: '...' } }",
+          "path": [
+            "m1",
+            "m2",
+            "m5",
+            "m6"
+          ],
+          "outcome": "ready-missing",
+          "explain": "create_mcp_connection raises 'URL is required for SSE connections'; it is printed, the server is skipped, and the agent runs without it.",
+          "brief": "An agent is started with a web server entry that has no address.",
+          "facts": [
+            "1 server, type sse",
+            "no url given",
+            "it is the only server"
+          ]
+        }
+      ]
+    }
+  ],
+  "quests": [
+    {
+      "id": "q1",
+      "type": "quiz",
+      "title": "When does the forge go quiet?",
+      "prompt": "What makes _agent_loop stop and return?",
+      "options": [
+        "A reply with no tool_use blocks",
+        "After a fixed number of turns",
+        "When stop_reason is 'max_tokens'",
+        "When any tool returns an error"
+      ],
+      "answer": 0,
+      "explain": "The loop is 'while True' and only returns in the else branch, when tool_calls is empty. There is no turn cap and errors from tools are just fed back.",
+      "xp": 20
+    },
+    {
+      "id": "q2",
+      "type": "predict",
+      "title": "The made-up tool",
+      "prompt": "Claude asks for a tool called 'bash' that was never registered. What happens?",
+      "target": "tool-call/c3",
+      "options": [
+        "Plain result goes back to Claude",
+        "Flagged error (is_error) goes back to Claude"
+      ],
+      "answer": 1,
+      "explain": "tool_dict['bash'] raises KeyError, caught in _execute_single_tool, which sets is_error=True.",
+      "xp": 25
+    },
+    {
+      "id": "q3",
+      "type": "predict",
+      "title": "Missing file, missing flag?",
+      "prompt": "Claude reads 'nope.txt', which does not exist. How does the result reach Claude?",
+      "target": "tool-call/c2",
+      "options": [
+        "Plain result goes back to Claude",
+        "Flagged error (is_error) goes back to Claude"
+      ],
+      "answer": 0,
+      "explain": "file_read returns 'Error: File not found at nope.txt' as a normal string. Nothing raised, so the runner never sets is_error.",
+      "xp": 25
+    },
+    {
+      "id": "q4",
+      "type": "predict",
+      "title": "Broken portal",
+      "prompt": "One MCP config is { type: 'sse' } with no url. What does run() do?",
+      "target": "mcp-setup/c3",
+      "options": [
+        "Agent runs with all expected tools",
+        "Agent runs without the broken server's tools"
+      ],
+      "answer": 1,
+      "explain": "The ValueError is caught inside setup_mcp_connections, printed, and that server is skipped. The run continues.",
+      "xp": 25
+    },
+    {
+      "id": "q5",
+      "type": "quiz",
+      "title": "Whose header wins?",
+      "prompt": "You pass message_params={'extra_headers': {'anthropic-beta': 'my-beta'}}. Which anthropic-beta header is sent?",
+      "options": [
+        "Only 'code-execution-2025-05-22'",
+        "Only 'my-beta'",
+        "Both, joined by a comma",
+        "None, the call fails"
+      ],
+      "answer": 1,
+      "explain": "merged_headers = {**default_headers, **custom_headers}, so the custom value replaces the default key. Code execution would then lose its beta header.",
+      "xp": 30
+    },
+    {
+      "id": "q6",
+      "type": "quiz",
+      "title": "Who runs web search?",
+      "prompt": "WebSearchServerTool has no execute() method. Why does the agent not crash when Claude searches the web?",
+      "options": [
+        "Anthropic runs it; its block type is server_tool_use, which the 'tool_use' filter skips",
+        "execute_tools catches the missing method and ignores it",
+        "The tool is removed before the call",
+        "MCP runs it instead"
+      ],
+      "answer": 0,
+      "explain": "The loop only collects blocks with type == 'tool_use'. Server tools are run by the API and come back already done.",
+      "xp": 30
+    },
+    {
+      "id": "q7",
+      "type": "quiz",
+      "title": "What the counter misses",
+      "prompt": "Which messages change history.total_tokens when they are added?",
+      "options": [
+        "Every message",
+        "Only user messages",
+        "Only assistant messages that come with usage numbers",
+        "Only tool results"
+      ],
+      "answer": 2,
+      "explain": "add_message only updates totals under 'if role == \"assistant\" and usage'. User text and tool results are counted later, inside the next reply's input tokens.",
+      "xp": 30
+    },
+    {
+      "id": "q8",
+      "type": "trace",
+      "title": "Ride the loop",
+      "prompt": "Follow a question that needs the calculator all the way around the loop.",
+      "target": "agent-loop",
+      "xp": 15
+    }
+  ],
+  "cracks": [
+    {
+      "id": "k1",
+      "at": "file-write-tool",
+      "severity": "high",
+      "title": "File tools can touch any path",
+      "hint": "Where is Claude allowed to write?",
+      "finding": "file_write and file_read take any path Claude gives, including absolute paths and '../'. Write even creates missing folders. There is no base folder or allowlist, so a confused or prompt-injected model can overwrite any file the process can reach.",
+      "suggestion": "Resolve the path and refuse anything outside a chosen working folder; ask before overwriting.",
+      "decoys": [
+        "Files are written without utf-8 encoding",
+        "Writes are not run in a thread, so they block the loop"
+      ],
+      "source": {
+        "file": "agents/tools/file_tools.py",
+        "lines": [
+          214,
+          230
+        ],
+        "anchor": "os.makedirs(file_path.parent, exist_ok=True)"
+      }
+    },
+    {
+      "id": "k2",
+      "at": "forge-agent",
+      "severity": "medium",
+      "title": "The loop has no turn limit",
+      "hint": "What stops a model that keeps calling tools?",
+      "finding": "_agent_loop is 'while True' and only exits when a reply has no tool calls. If Claude keeps asking for tools (for example retrying a failing one), the agent keeps calling the API and spending tokens with no cap.",
+      "suggestion": "Add a max_turns setting and stop with a clear message when it is reached.",
+      "decoys": [
+        "Tools run in parallel, so results can arrive out of order",
+        "max_tokens 4096 is too small for long answers"
+      ],
+      "source": {
+        "file": "agents/agent.py",
+        "lines": [
+          104,
+          155
+        ],
+        "anchor": "while True:"
+      }
+    },
+    {
+      "id": "k3",
+      "at": "context-trimmer",
+      "severity": "medium",
+      "title": "Big tool results are not counted before the next call",
+      "hint": "When does total_tokens learn about a tool result?",
+      "finding": "total_tokens only grows when an assistant reply arrives with usage. A tool result (say a whole large file read with max_lines=0) is added without counting, so truncate() checks an old number and lets the request go out. The API can then reject it as too long, and that error is not caught.",
+      "suggestion": "Estimate or count tokens for new user/tool messages before calling truncate(), or cap tool output size.",
+      "decoys": [
+        "The truncation notice is counted as 25 tokens instead of its real size",
+        "Messages are removed in pairs instead of one by one"
+      ],
+      "source": {
+        "file": "agents/utils/history_util.py",
+        "lines": [
+          57,
+          67
+        ],
+        "anchor": "if role == \"assistant\" and usage:"
+      }
+    },
+    {
+      "id": "k4",
+      "at": "file-write-tool",
+      "severity": "low",
+      "title": "Edit replaces every match, not one",
+      "hint": "What if old_text shows up three times?",
+      "finding": "When old_text appears more than once, edit still replaces all copies and only then reports a warning. A short old_text can silently change places Claude did not mean to touch.",
+      "suggestion": "Refuse the edit when there is more than one match and ask for more context.",
+      "decoys": [
+        "Edit fails on files with Windows line endings",
+        "Edit does not check that the file exists"
+      ],
+      "source": {
+        "file": "agents/tools/file_tools.py",
+        "lines": [
+          255,
+          265
+        ],
+        "anchor": "count = content.count(old_text)"
+      }
+    }
+  ]
+}

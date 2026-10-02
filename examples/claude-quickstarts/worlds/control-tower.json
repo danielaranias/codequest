@@ -1,0 +1,2052 @@
+{
+  "id": "control-tower",
+  "name": "computer-use-demo",
+  "theme": "tundra",
+  "tagline": "Where Claude looks at a screen, moves the mouse, and types commands in a loop",
+  "summary": "A demo that lets Claude drive a Linux desktop inside a Docker container. A Streamlit page takes your message, then a sampling loop keeps calling the Claude API and running the tools Claude asks for (screen/mouse/keyboard, bash, file editor) until Claude stops asking. Tool versions decide which tools and beta headers are sent.",
+  "paths": [
+    "computer-use-demo/computer_use_demo/",
+    "computer-use-demo/image/",
+    "computer-use-demo/Dockerfile",
+    "computer-use-demo/tests/"
+  ],
+  "districts": [
+    {
+      "id": "cockpit",
+      "name": "Cockpit (Streamlit UI)"
+    },
+    {
+      "id": "tower",
+      "name": "Tower (sampling loop)"
+    },
+    {
+      "id": "sky",
+      "name": "Sky (Claude API)"
+    },
+    {
+      "id": "hangar",
+      "name": "Hangar (tools)"
+    }
+  ],
+  "entities": [
+    {
+      "id": "streamlit-app",
+      "kind": "entry",
+      "name": "Streamlit chat page",
+      "district": "cockpit",
+      "summary": "The web page you open at port 8080. It shows the chat, takes your message and starts the sampling loop.",
+      "details": "- Started by image/entrypoint.sh after the virtual desktop is up\n- Re-renders the whole chat on every Streamlit run\n- Your message is added to the conversation, then sampling_loop is awaited\n- Callbacks render Claude's text, tool results and raw HTTP logs as they arrive",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            244,
+            253
+          ],
+          "anchor": "async def main():"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            419,
+            465
+          ],
+          "anchor": "st.session_state.messages = await sampling_loop("
+        },
+        {
+          "file": "computer-use-demo/image/entrypoint.sh",
+          "lines": [
+            1,
+            15
+          ],
+          "anchor": "python -m streamlit run computer_use_demo/streamlit.py"
+        }
+      ]
+    },
+    {
+      "id": "sidebar",
+      "kind": "ui",
+      "name": "Settings sidebar",
+      "district": "cockpit",
+      "summary": "The left panel where you pick the API provider, model, tool version, image limit and thinking mode.",
+      "details": "- Provider radio: anthropic, bedrock or vertex\n- 'Only send N most recent images' defaults to 3\n- Tool Versions radio lists every ToolVersion\n- Thinking options shown depend on the model's config\n- Reset button kills Xvfb and tint2 and restarts the desktop",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            255,
+            311
+          ],
+          "anchor": "\"Only send N most recent images\","
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            315,
+            380
+          ],
+          "anchor": "\"Thinking Effort\","
+        }
+      ]
+    },
+    {
+      "id": "auth-check",
+      "kind": "guardrail",
+      "name": "Provider credentials check",
+      "district": "cockpit",
+      "summary": "Before the chat appears, checks that the chosen provider has credentials.",
+      "details": "- Anthropic: API key must not be empty\n- Bedrock: boto3 must find AWS credentials\n- Vertex: CLOUD_ML_REGION must be set and Google default credentials must load\n- Runs once; then auth_validated is set to True",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            503,
+            523
+          ],
+          "anchor": "def validate_auth(provider: APIProvider, api_key: str | None):"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            382,
+            389
+          ],
+          "anchor": "if auth_error := validate_auth("
+        }
+      ],
+      "guard": {
+        "rule": "The chosen API provider must have usable credentials",
+        "checks": "API key present (Anthropic), AWS credentials (Bedrock), CLOUD_ML_REGION + Google creds (Vertex)",
+        "onFail": "A warning with the auth problem is shown and the chat is not rendered"
+      }
+    },
+    {
+      "id": "sampling-loop",
+      "kind": "agent",
+      "name": "Sampling loop",
+      "district": "tower",
+      "summary": "The heart of the demo: calls Claude, runs every tool Claude asks for, sends the results back, and repeats.",
+      "details": "- Builds the tool list from the chosen tool version\n- Each turn: call API, append Claude's reply, run each tool_use block\n- Tool results go back as a user message, then the loop runs again\n- Stops when a reply has no tool_use blocks, or on an API error\n- Toolset member calls run in order and stop at the first failure",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            88,
+            117
+          ],
+          "anchor": "async def sampling_loop("
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            200,
+            236
+          ],
+          "anchor": "if toolset_name is not None and member_call_failed:"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            238,
+            241
+          ],
+          "anchor": "if not tool_result_content:"
+        }
+      ],
+      "agent": {
+        "role": "Controls a Linux desktop by looking at screenshots and using mouse, keyboard, shell and file tools",
+        "model": "claude-opus-4-8",
+        "tools": [
+          "computer-tool",
+          "bash-tool",
+          "edit-tool"
+        ],
+        "prompt": "system-prompt"
+      }
+    },
+    {
+      "id": "context-trimmer",
+      "kind": "guardrail",
+      "name": "Screenshot trimmer and prompt cache",
+      "district": "tower",
+      "summary": "Keeps the conversation affordable: either caches it (Anthropic) or drops old screenshots (Bedrock/Vertex).",
+      "details": "- On Anthropic: adds cache breakpoints to the 3 newest user turns and sets image trimming to 0\n- Comment says cached reads cost 10%, so breaking the cache is not worth it\n- Otherwise: removes all but the N newest screenshot images\n- Removes images in chunks of N so the cache breaks less often",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            119,
+            146
+          ],
+          "anchor": "only_n_most_recent_images = 0"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            244,
+            290
+          ],
+          "anchor": "images_to_remove -= images_to_remove % min_removal_threshold"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            316,
+            339
+          ],
+          "anchor": "breakpoints_remaining = 3"
+        }
+      ],
+      "guard": {
+        "rule": "Old screenshots must not blow up the prompt size",
+        "checks": "Anthropic: cache_control on 3 newest user turns; others: count tool_result images vs only_n_most_recent_images",
+        "onFail": "Older images are silently removed from tool results before the API call"
+      }
+    },
+    {
+      "id": "system-prompt",
+      "kind": "config",
+      "name": "System prompt",
+      "district": "tower",
+      "summary": "Fixed instructions telling Claude about the Ubuntu VM, Firefox, DISPLAY=:1 and today's date, plus an optional suffix you type in the sidebar.",
+      "details": "- Built once at import, so the date is the date the app started\n- Tips: use curl not wget, ignore the Firefox wizard, redirect big output to a file\n- Sidebar 'Custom System Prompt Suffix' is appended and saved to ~/.anthropic/system_prompt",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            66,
+            85
+          ],
+          "anchor": "SYSTEM_PROMPT = f\"\"\"<SYSTEM_CAPABILITY>"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            113,
+            116
+          ],
+          "anchor": "text=f\"{SYSTEM_PROMPT}{' ' + system_prompt_suffix if system_prompt_suffix else ''}\","
+        }
+      ]
+    },
+    {
+      "id": "tool-versions",
+      "kind": "config",
+      "name": "Tool versions and model configs",
+      "district": "tower",
+      "summary": "Maps each tool version to its tool classes and beta header, and each model name to a tool version and thinking modes.",
+      "details": "- 5 tool groups, e.g. computer_use_20251124 adds zoom\n- computer_toolset_20260801 has beta_flag=None (GA, no beta header)\n- Every group pairs a computer tool with the same edit tool and a bash tool\n- Unknown model IDs fall back to DEFAULT_MODEL_CONF after a longest-prefix match",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/groups.py",
+          "lines": [
+            36,
+            67
+          ],
+          "anchor": "TOOL_GROUPS: list[ToolGroup] = ["
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            111,
+            149
+          ],
+          "anchor": "MODEL_TO_MODEL_CONF: dict[str, ModelConfig] = {"
+        }
+      ]
+    },
+    {
+      "id": "conversation",
+      "kind": "store",
+      "name": "Conversation messages",
+      "district": "tower",
+      "summary": "The list of user and assistant messages kept in Streamlit session state and sent to Claude every turn.",
+      "details": "- Lives in st.session_state.messages\n- The loop appends Claude's replies and the tool results in place\n- If you interrupt mid-loop, fake 'human stopped' tool results are added to heal the history\n- Tool outputs for display are kept separately in st.session_state.tools",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            183,
+            185
+          ],
+          "anchor": "st.session_state.messages = []"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/streamlit.py",
+          "lines": [
+            468,
+            493
+          ],
+          "anchor": "def maybe_add_interruption_blocks():"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            192,
+            198
+          ],
+          "anchor": "\"role\": \"assistant\","
+        }
+      ]
+    },
+    {
+      "id": "claude-api",
+      "kind": "external",
+      "name": "Claude API (Anthropic, Bedrock, Vertex)",
+      "district": "sky",
+      "summary": "The model endpoint. The loop picks an Anthropic, AnthropicBedrock or AnthropicVertex client by provider.",
+      "details": "- Only the Anthropic client gets the API key and max_retries=4\n- Uses the raw-response form so HTTP logs can be shown\n- Sends betas only if there are any (toolset group has none)\n- On any API error the loop reports it and returns",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            124,
+            130
+          ],
+          "anchor": "client = Anthropic(api_key=api_key, max_retries=4)"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            163,
+            184
+          ],
+          "anchor": "raw_response = client.beta.messages.with_raw_response.create("
+        }
+      ]
+    },
+    {
+      "id": "tool-errors",
+      "kind": "guardrail",
+      "name": "Tool router and error catcher",
+      "district": "hangar",
+      "summary": "Finds the tool Claude named, runs it, and turns any ToolError into an error result that goes back to Claude.",
+      "details": "- Unknown tool name gives 'Tool X is invalid'\n- Toolset calls are routed by toolset_name, the member name becomes the action\n- Only ToolError is caught; other exceptions escape\n- _make_api_tool_result sets is_error=True and adds <system> notes",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/collection.py",
+          "lines": [
+            38,
+            62
+          ],
+          "anchor": "return ToolFailure(error=f\"Tool {name} is invalid\")"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/loop.py",
+          "lines": [
+            342,
+            382
+          ],
+          "anchor": "def _make_api_tool_result("
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/base.py",
+          "lines": [
+            61,
+            69
+          ],
+          "anchor": "class ToolError(Exception):"
+        }
+      ],
+      "guard": {
+        "rule": "Tool failures must reach Claude as error results, not crash the app",
+        "checks": "tool name exists in tool_map / toolset_map; ToolError raised while running",
+        "onFail": "A ToolFailure with the message is sent back as a tool_result with is_error=true"
+      }
+    },
+    {
+      "id": "computer-tool",
+      "kind": "skill",
+      "name": "Computer tool (screen, mouse, keyboard)",
+      "district": "hangar",
+      "summary": "Moves the mouse, clicks, types and takes screenshots on the virtual X display (Xvfb on :1) using xdotool.",
+      "details": "- Most actions wait 2s, then return a fresh screenshot\n- Coordinates are scaled between screenshot size and real screen size (XGA/WXGA/FWXGA targets)\n- Typing is sent in 50-character chunks\n- 20251124 adds zoom; the 20260801 toolset makes each action its own member tool",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/computer.py",
+          "lines": [
+            88,
+            126
+          ],
+          "anchor": "class BaseComputerTool:"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/computer.py",
+          "lines": [
+            267,
+            302
+          ],
+          "anchor": "def scale_coordinates(self, source: ScalingSource, x: int, y: int):"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/computer.py",
+          "lines": [
+            543,
+            579
+          ],
+          "anchor": "class ComputerToolset20260801(ComputerTool20251124):"
+        }
+      ]
+    },
+    {
+      "id": "bash-tool",
+      "kind": "skill",
+      "name": "Bash tool",
+      "district": "hangar",
+      "summary": "Runs shell commands in one long-lived bash process, so cd and variables stick between calls.",
+      "details": "- Session starts lazily on the first command\n- Each command is followed by echo '<<exit>>' so the tool knows it finished\n- Reads stdout/stderr straight from the stream buffers\n- restart: true stops the old shell and starts a new one",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/bash.py",
+          "lines": [
+            104,
+            143
+          ],
+          "anchor": "class BashTool20250124(BaseAnthropicTool):"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/bash.py",
+          "lines": [
+            8,
+            45
+          ],
+          "anchor": "class _BashSession:"
+        }
+      ]
+    },
+    {
+      "id": "bash-timeout",
+      "kind": "guardrail",
+      "name": "Bash timeout",
+      "district": "hangar",
+      "summary": "Gives each bash command 120 seconds. After a timeout the session is marked dead until Claude restarts it.",
+      "details": "- Polls the output every 0.2s looking for the sentinel\n- On timeout sets _timed_out=True and raises ToolError\n- Later commands fail with the same message until restart\n- If bash itself exited, returns an error with system note 'tool must be restarted'",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/bash.py",
+          "lines": [
+            47,
+            59
+          ],
+          "anchor": "if self._timed_out:"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/bash.py",
+          "lines": [
+            72,
+            88
+          ],
+          "anchor": "async with asyncio.timeout(self._timeout):"
+        }
+      ],
+      "guard": {
+        "rule": "A bash command may not run longer than 120 seconds",
+        "checks": "sentinel '<<exit>>' seen in stdout within _timeout; session not already timed out or exited",
+        "onFail": "ToolError 'timed out: bash has not returned in 120.0 seconds and must be restarted'"
+      }
+    },
+    {
+      "id": "edit-tool",
+      "kind": "skill",
+      "name": "File editor tool",
+      "district": "hangar",
+      "summary": "Lets Claude view, create, str_replace and insert in files (text_editor_20250728, named str_replace_based_edit_tool).",
+      "details": "- view shows files with line numbers, or a directory 2 levels deep\n- create refuses to overwrite an existing file\n- str_replace and insert return a small snippet around the change\n- This version has no undo_edit command",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+          "lines": [
+            18,
+            85
+          ],
+          "anchor": "class EditTool20250728(BaseAnthropicTool):"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+          "lines": [
+            160,
+            206
+          ],
+          "anchor": "new_file_content = file_content.replace(old_str, new_str)"
+        }
+      ]
+    },
+    {
+      "id": "edit-checks",
+      "kind": "guardrail",
+      "name": "Edit checks",
+      "district": "hangar",
+      "summary": "Stops bad edits: the path must be absolute and exist, and old_str must appear exactly once.",
+      "details": "- Relative path is rejected\n- create on an existing file is rejected; other commands on a missing file are rejected\n- Directories only allow view\n- str_replace counts old_str: 0 = not found, more than 1 = lists the line numbers",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+          "lines": [
+            87,
+            111
+          ],
+          "anchor": "def validate_path(self, command: str, path: Path):"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+          "lines": [
+            167,
+            182
+          ],
+          "anchor": "occurrences = file_content.count(old_str)"
+        }
+      ],
+      "guard": {
+        "rule": "Edits must target a real absolute path and an unambiguous old_str",
+        "checks": "path.is_absolute(), path.exists(), not a directory, file_content.count(old_str) == 1",
+        "onFail": "ToolError explaining the problem; the file is not touched"
+      }
+    },
+    {
+      "id": "file-history",
+      "kind": "store",
+      "name": "File edit history",
+      "district": "hangar",
+      "summary": "An in-memory map from file path to the list of earlier file contents, saved on every create, str_replace and insert.",
+      "details": "- A defaultdict(list) on the edit tool instance\n- Stores the whole old file text each time\n- Nothing reads it: this tool version has no undo_edit\n- Lost when the loop ends, since tools are rebuilt per sampling_loop call",
+      "source": [
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+          "lines": [
+            32,
+            36
+          ],
+          "anchor": "self._file_history = defaultdict(list)"
+        },
+        {
+          "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+          "lines": [
+            188,
+            191
+          ],
+          "anchor": "self._file_history[path].append(file_content)"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "sampling-turn",
+      "name": "One run of the sampling loop",
+      "trigger": "You type a message in the chat and press Enter",
+      "summary": "Your message goes to Claude; every tool Claude asks for is run and the results go back, until Claude replies with no tool calls.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "auth-check",
+          "action": "Checks the provider has credentials (only until it passes once)",
+          "carries": "{ provider: 'anthropic', api_key: 'sk-ant-...' }",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/streamlit.py",
+            "lines": [
+              382,
+              389
+            ],
+            "anchor": "if auth_error := validate_auth("
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "credentials found"
+            },
+            {
+              "to": "outcome:auth-blocked",
+              "when": "credentials missing"
+            }
+          ],
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Claude Computer Use Demo"
+              },
+              {
+                "t": "banner",
+                "text": "⚠️ Security Alert: Never provide access to sensitive accounts or data, as malicious web content can hijack Claude's behavior",
+                "state": "muted"
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "API Provider",
+                  "Anthropic",
+                  "Bedrock",
+                  "Vertex"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Model"
+              },
+              {
+                "t": "input",
+                "text": "Claude API Key"
+              }
+            ],
+            "note": "The page loads: title, a security warning, and the sidebar settings."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "streamlit-app",
+          "action": "Adds your message to the conversation and starts sampling_loop",
+          "carries": "{ role: 'user', content: [{ type: 'text', text: 'Open Firefox' }] }",
+          "next": [
+            {
+              "to": "s3",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Claude Computer Use Demo"
+              },
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "user",
+                "items": [
+                  "<your message>"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type a message to send to Claude to control the computer..."
+              }
+            ],
+            "note": "The Chat tab is drawn and your message appears as a new bubble."
+          }
+        },
+        {
+          "id": "s3",
+          "at": "context-trimmer",
+          "action": "Anthropic: adds cache breakpoints. Bedrock/Vertex: drops old screenshots",
+          "carries": "messages + betas list",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/loop.py",
+            "lines": [
+              132,
+              146
+            ],
+            "anchor": "_inject_prompt_caching(messages)"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "claude-api",
+          "action": "Sends system prompt, tools and messages to the model",
+          "carries": "{ model, system, tools, messages, betas }",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/loop.py",
+            "lines": [
+              167,
+              184
+            ],
+            "anchor": "except (APIStatusError, APIResponseValidationError) as e:"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "API answers"
+            },
+            {
+              "to": "outcome:api-error",
+              "when": "API error (401, 429, network...)"
+            }
+          ]
+        },
+        {
+          "id": "s5",
+          "at": "sampling-loop",
+          "action": "Appends Claude's reply and looks for tool_use blocks",
+          "carries": "[{ type: 'text' }, { type: 'tool_use', name: 'computer', input: { action: 'screenshot' } }]",
+          "next": [
+            {
+              "to": "s6",
+              "when": "reply has tool_use blocks"
+            },
+            {
+              "to": "outcome:done",
+              "when": "no tool_use blocks"
+            }
+          ],
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "user",
+                "items": [
+                  "<your message>"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "<Claude's text>",
+                  "Tool Use: computer",
+                  "Input: {'action': 'screenshot'}"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "A \"Request/Response (<time>)\" entry is added under HTTP Exchange Logs.",
+                "state": "muted"
+              },
+              {
+                "t": "input",
+                "text": "Type a message to send to Claude to control the computer..."
+              }
+            ],
+            "note": "Claude's reply appears: its text, and a code box for any tool it wants to use."
+          }
+        },
+        {
+          "id": "s6",
+          "at": "tool-errors",
+          "action": "Looks up the tool by name",
+          "carries": "{ name: 'computer', input: { action: 'screenshot' } }",
+          "next": [
+            {
+              "to": "s7",
+              "when": "tool name known"
+            },
+            {
+              "to": "s8",
+              "when": "unknown name -> 'Tool X is invalid'"
+            }
+          ]
+        },
+        {
+          "id": "s7",
+          "at": "computer-tool",
+          "action": "Runs the action on the X display and grabs a screenshot",
+          "carries": "{ action: 'screenshot' }",
+          "next": [
+            {
+              "to": "s8",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s8",
+          "at": "tool-errors",
+          "action": "Wraps the result as a tool_result; ToolError becomes is_error=true",
+          "carries": "{ type: 'tool_result', tool_use_id, content: [image], is_error: false }",
+          "next": [
+            {
+              "to": "s9",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: computer",
+                  "Input: {'action': 'screenshot'}"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "tool",
+                "items": [
+                  "<screenshot image>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "Tool text shows as a code box or plain text, errors as a red box. With \"Hide screenshots\" ticked the image is left out.",
+                "state": "muted"
+              },
+              {
+                "t": "input",
+                "text": "Type a message to send to Claude to control the computer..."
+              }
+            ],
+            "note": "A tool bubble appears under the request with what the tool gave back."
+          }
+        },
+        {
+          "id": "s9",
+          "at": "conversation",
+          "action": "Appends all tool results as one user message, then loops",
+          "carries": "{ role: 'user', content: [tool_result...] }",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/loop.py",
+            "lines": [
+              238,
+              241
+            ],
+            "anchor": "messages.append({\"content\": tool_result_content, \"role\": \"user\"})"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "always (next turn)"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "done",
+          "label": "Claude's final answer shown",
+          "kind": "success",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Claude Computer Use Demo"
+              },
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "user",
+                "items": [
+                  "<your message>"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "<Claude's final answer>"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type a message to send to Claude to control the computer..."
+              }
+            ],
+            "note": "Claude's last message is plain text; the page waits for your next message."
+          }
+        },
+        {
+          "id": "api-error",
+          "label": "API error shown, loop returns",
+          "kind": "error",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "user",
+                "items": [
+                  "<your message>"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "<error class name>: <the error text> — Traceback: <traceback>",
+                "state": "error"
+              },
+              {
+                "t": "text",
+                "text": "A rate limit shows \"You have been rate limited.\" instead of a traceback.",
+                "state": "muted"
+              },
+              {
+                "t": "text",
+                "text": "The failed call is listed as \"Request/Response (<time>)\" under HTTP Exchange Logs.",
+                "state": "muted"
+              },
+              {
+                "t": "input",
+                "text": "Type a message to send to Claude to control the computer..."
+              }
+            ],
+            "note": "A red error box appears under your message and no reply from Claude is shown."
+          }
+        },
+        {
+          "id": "auth-blocked",
+          "label": "Auth warning, chat hidden",
+          "kind": "blocked",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Claude Computer Use Demo"
+              },
+              {
+                "t": "banner",
+                "text": "⚠️ Security Alert: Never provide access to sensitive accounts or data, as malicious web content can hijack Claude's behavior",
+                "state": "muted"
+              },
+              {
+                "t": "banner",
+                "text": "Please resolve the following auth issue:",
+                "state": "error"
+              },
+              {
+                "t": "list",
+                "items": [
+                  "Enter your Claude API key in the sidebar to continue.",
+                  "You must have AWS credentials set up to use the Bedrock API.",
+                  "Set the CLOUD_ML_REGION environment variable to use the Vertex API.",
+                  "Your google cloud credentials are not set up correctly."
+                ]
+              },
+              {
+                "t": "text",
+                "text": "One of these lines is shown, depending on the provider. No tabs and no message box are drawn.",
+                "state": "muted"
+              }
+            ],
+            "note": "A yellow warning names the problem; the chat is not drawn at all."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Bedrock with no AWS credentials",
+          "input": "provider=bedrock, no ~/.aws credentials",
+          "path": [
+            "s1"
+          ],
+          "outcome": "auth-blocked",
+          "explain": "boto3 finds no credentials, so validate_auth returns a message and main() returns before the chat is drawn.",
+          "brief": "You open the demo set to Bedrock on a machine with no AWS login.",
+          "facts": [
+            "provider: Bedrock",
+            "no AWS credentials"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Simple question",
+          "input": "'What is 2+2?'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5"
+          ],
+          "outcome": "done",
+          "explain": "Claude answers with text only, so tool_result_content is empty and the loop returns.",
+          "brief": "You ask Claude a simple sum.",
+          "facts": [
+            "provider: Anthropic",
+            "API key works",
+            "answer needs no tool"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Take a screenshot, then answer",
+          "input": "'What is on the screen?'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s3",
+            "s4",
+            "s5"
+          ],
+          "outcome": "done",
+          "explain": "First reply asks for a screenshot; the image goes back as a tool_result; the second reply is plain text so the loop ends.",
+          "brief": "You ask Claude what is on the screen.",
+          "facts": [
+            "provider: Anthropic",
+            "API key works",
+            "needs one screenshot",
+            "computer tool is known"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Wrong API key",
+          "input": "api_key='sk-ant-wrong'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4"
+          ],
+          "outcome": "api-error",
+          "explain": "The key is not empty so auth-check passes, but the API returns 401; the loop calls api_response_callback with the error and returns messages.",
+          "brief": "You send a message with an API key that is typed wrong.",
+          "facts": [
+            "provider: Anthropic",
+            "key filled in but wrong",
+            "API answers 401"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "edit-str-replace",
+      "name": "Claude edits a file with str_replace",
+      "trigger": "Claude calls str_replace_based_edit_tool with command 'str_replace'",
+      "summary": "The edit tool checks the path and that old_str is unique, then rewrites the file and saves the old text in history.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "edit-tool",
+          "action": "Receives the call and builds a Path",
+          "carries": "{ command: 'str_replace', path: '/home/computeruse/app.py', old_str: 'DEBUG = True', new_str: 'DEBUG = False' }",
+          "next": [
+            {
+              "to": "s2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: str_replace_based_edit_tool",
+                  "Input: {'command': 'str_replace', 'path': '<file path>', 'old_str': '<old text>', 'new_str': '<new text>'}"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type a message to send to Claude to control the computer..."
+              }
+            ],
+            "note": "Claude's edit request appears in the chat as a code box."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "edit-checks",
+          "action": "Checks path is absolute, exists, and is not a directory",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+            "lines": [
+              87,
+              111
+            ],
+            "anchor": "if not path.is_absolute():"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "path ok"
+            },
+            {
+              "to": "outcome:bad-path",
+              "when": "relative, missing or a directory"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "edit-tool",
+          "action": "Checks old_str was given",
+          "next": [
+            {
+              "to": "s4",
+              "when": "old_str present"
+            },
+            {
+              "to": "outcome:missing-param",
+              "when": "old_str is None"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "edit-checks",
+          "action": "Counts how many times old_str appears (tabs expanded)",
+          "carries": "occurrences = file_content.count(old_str)",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/tools/edit.py",
+            "lines": [
+              167,
+              182
+            ],
+            "anchor": "occurrences = file_content.count(old_str)"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "exactly 1"
+            },
+            {
+              "to": "outcome:not-found",
+              "when": "0 times"
+            },
+            {
+              "to": "outcome:not-unique",
+              "when": "more than 1"
+            }
+          ]
+        },
+        {
+          "id": "s5",
+          "at": "edit-tool",
+          "action": "Replaces the text and writes the file",
+          "next": [
+            {
+              "to": "s6",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "file-history",
+          "action": "Saves the old file text, returns a snippet of the change",
+          "next": [
+            {
+              "to": "outcome:edited",
+              "when": "always"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "edited",
+          "label": "File edited, snippet returned",
+          "kind": "success",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: str_replace_based_edit_tool",
+                  "Input: {'command': 'str_replace', 'path': '<file path>', 'old_str': '<old text>', 'new_str': '<new text>'}"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "tool",
+                "items": [
+                  "The file <file path> has been edited.",
+                  "Here's the result of running `cat -n` on a snippet of <file path>:",
+                  "<numbered lines around the change>",
+                  "Review the changes and make sure they are as expected. Edit the file again if necessary."
+                ],
+                "state": "ok"
+              }
+            ],
+            "note": "A tool bubble shows a code box with a few lines of the file around the change."
+          }
+        },
+        {
+          "id": "bad-path",
+          "label": "Rejected: bad path",
+          "kind": "blocked",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: str_replace_based_edit_tool",
+                  "Input: {'command': 'str_replace', 'path': '<file path>', 'old_str': '<old text>', 'new_str': '<new text>'}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "<one of the path errors below>",
+                "state": "error"
+              },
+              {
+                "t": "list",
+                "items": [
+                  "The path <path> is not an absolute path, it should start with `/`. Maybe you meant /<path>?",
+                  "The path <path> does not exist. Please provide a valid path.",
+                  "The path <path> is a directory and only the `view` command can be used on directories"
+                ]
+              }
+            ],
+            "note": "A red error box in the tool bubble says what is wrong with the path."
+          }
+        },
+        {
+          "id": "missing-param",
+          "label": "Rejected: old_str missing",
+          "kind": "error",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: str_replace_based_edit_tool",
+                  "Input: {'command': 'str_replace', 'path': '<file path>', 'old_str': '<old text>', 'new_str': '<new text>'}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "Parameter `old_str` is required for command: str_replace",
+                "state": "error"
+              }
+            ],
+            "note": "A red error box in the tool bubble names the missing input."
+          }
+        },
+        {
+          "id": "not-found",
+          "label": "Rejected: old_str not found",
+          "kind": "error",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: str_replace_based_edit_tool",
+                  "Input: {'command': 'str_replace', 'path': '<file path>', 'old_str': '<old text>', 'new_str': '<new text>'}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "No replacement was performed, old_str `<old text>` did not appear verbatim in <file path>.",
+                "state": "error"
+              }
+            ],
+            "note": "A red error box says the text to replace was not in the file."
+          }
+        },
+        {
+          "id": "not-unique",
+          "label": "Rejected: old_str not unique",
+          "kind": "error",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: str_replace_based_edit_tool",
+                  "Input: {'command': 'str_replace', 'path': '<file path>', 'old_str': '<old text>', 'new_str': '<new text>'}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "No replacement was performed. Multiple occurrences of old_str `<old text>` in lines [<line numbers>]. Please ensure it is unique",
+                "state": "error"
+              }
+            ],
+            "note": "A red error box lists the lines where the text appears."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Clean edit",
+          "input": "path='/home/computeruse/app.py', old_str='DEBUG = True' (appears once)",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "outcome": "edited",
+          "explain": "All checks pass; the file is rewritten and the old text is pushed to _file_history.",
+          "brief": "Claude changes one setting line in a file.",
+          "facts": [
+            "full path from /",
+            "file exists",
+            "old text given",
+            "old text appears once"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Relative path",
+          "input": "path='app.py'",
+          "path": [
+            "s1",
+            "s2"
+          ],
+          "outcome": "bad-path",
+          "explain": "Path('app.py').is_absolute() is False, so validate_path raises a ToolError before anything is read.",
+          "brief": "Claude tries to edit a file by its short name only.",
+          "facts": [
+            "path: app.py",
+            "path does not start with /"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "old_str appears three times",
+          "input": "old_str='return None' in a file with 3 such lines",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4"
+          ],
+          "outcome": "not-unique",
+          "explain": "count() is 3, so the tool lists the line numbers and asks Claude to make old_str unique.",
+          "brief": "Claude tries to replace a line that is in the file several times.",
+          "facts": [
+            "full path from /",
+            "file exists",
+            "old text given",
+            "old text appears 3 times"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Forgot old_str",
+          "input": "command='str_replace', no old_str",
+          "path": [
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "outcome": "missing-param",
+          "explain": "The path is fine, but old_str is None, so 'Parameter `old_str` is required' is raised.",
+          "brief": "Claude asks for a replace but leaves out the text to find.",
+          "facts": [
+            "full path from /",
+            "file exists",
+            "no old text given"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bash-command",
+      "name": "Claude runs a bash command",
+      "trigger": "Claude calls the bash tool",
+      "summary": "The command is sent into a long-lived shell with a sentinel echo; the tool waits up to 120s for the sentinel.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "bash-tool",
+          "action": "Reads the input: restart flag or command",
+          "carries": "{ command: 'ls -la' } or { restart: true }",
+          "next": [
+            {
+              "to": "s2",
+              "when": "restart is true"
+            },
+            {
+              "to": "s3",
+              "when": "otherwise"
+            }
+          ],
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: bash",
+                  "Input: {'command': '<the command>'} or {'restart': True}"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type a message to send to Claude to control the computer..."
+              }
+            ],
+            "note": "Claude's bash request appears in the chat as a code box."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "bash-tool",
+          "action": "Stops the old shell and starts a new one",
+          "next": [
+            {
+              "to": "outcome:restarted",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "bash-tool",
+          "action": "Starts a session if none, checks a command was given",
+          "next": [
+            {
+              "to": "s4",
+              "when": "command given"
+            },
+            {
+              "to": "outcome:no-command",
+              "when": "command is None"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "bash-timeout",
+          "action": "Checks the shell is alive and has not timed out before",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/tools/bash.py",
+            "lines": [
+              47,
+              59
+            ],
+            "anchor": "if self._process.returncode is not None:"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "healthy"
+            },
+            {
+              "to": "outcome:dead-shell",
+              "when": "bash process exited"
+            },
+            {
+              "to": "outcome:must-restart",
+              "when": "_timed_out is True"
+            }
+          ]
+        },
+        {
+          "id": "s5",
+          "at": "bash-tool",
+          "action": "Writes the command plus \"; echo '<<exit>>'\" to the shell",
+          "carries": "b\"ls -la; echo '<<exit>>'\\n\"",
+          "next": [
+            {
+              "to": "s6",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "bash-timeout",
+          "action": "Polls stdout every 0.2s for the sentinel, up to 120s",
+          "source": {
+            "file": "computer-use-demo/computer_use_demo/tools/bash.py",
+            "lines": [
+              72,
+              88
+            ],
+            "anchor": "if self._sentinel in output:"
+          },
+          "next": [
+            {
+              "to": "outcome:output",
+              "when": "sentinel seen"
+            },
+            {
+              "to": "s7",
+              "when": "120s pass"
+            }
+          ]
+        },
+        {
+          "id": "s7",
+          "at": "bash-timeout",
+          "action": "Marks the session timed out and raises ToolError",
+          "next": [
+            {
+              "to": "outcome:timeout",
+              "when": "always"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "output",
+          "label": "Output returned",
+          "kind": "success",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: bash",
+                  "Input: {'command': '<the command>'}"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "tool",
+                "items": [
+                  "<what the command printed>"
+                ],
+                "state": "ok"
+              },
+              {
+                "t": "text",
+                "text": "Anything the command wrote as errors shows in a red box below.",
+                "state": "muted"
+              }
+            ],
+            "note": "A tool bubble shows the command output in a code box."
+          }
+        },
+        {
+          "id": "timeout",
+          "label": "Timed out, must restart",
+          "kind": "error",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: bash",
+                  "Input: {'command': '<the command>'}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "timed out: bash has not returned in 120.0 seconds and must be restarted",
+                "state": "error"
+              }
+            ],
+            "note": "After a long wait, a red error box says the shell timed out."
+          }
+        },
+        {
+          "id": "must-restart",
+          "label": "Refused: session already timed out",
+          "kind": "blocked",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: bash",
+                  "Input: {'command': '<the command>'}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "timed out: bash has not returned in 120.0 seconds and must be restarted",
+                "state": "error"
+              }
+            ],
+            "note": "The red timeout box appears right away; the command was not run."
+          }
+        },
+        {
+          "id": "dead-shell",
+          "label": "Error: bash has exited",
+          "kind": "error",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: bash",
+                  "Input: {'command': '<the command>'}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "bash has exited with returncode <n>",
+                "state": "error"
+              }
+            ],
+            "note": "A red error box says the shell is gone."
+          }
+        },
+        {
+          "id": "restarted",
+          "label": "Shell restarted",
+          "kind": "success",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: bash",
+                  "Input: {'restart': True}"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "tool",
+                "items": [
+                  "<empty bubble>"
+                ],
+                "state": "muted"
+              },
+              {
+                "t": "text",
+                "text": "The text \"tool has been restarted.\" goes to Claude only; the page does not print it.",
+                "state": "muted"
+              }
+            ],
+            "note": "An empty tool bubble appears; the restart message is not shown on the page."
+          }
+        },
+        {
+          "id": "no-command",
+          "label": "Error: no command provided",
+          "kind": "error",
+          "screen": {
+            "name": "streamlit.py — main()",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "tabs",
+                "items": [
+                  "Chat",
+                  "HTTP Exchange Logs"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "assistant",
+                "items": [
+                  "Tool Use: bash",
+                  "Input: {}"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "no command provided.",
+                "state": "error"
+              }
+            ],
+            "note": "A red error box says no command was given."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Quick command",
+          "input": "command='echo hello'",
+          "path": [
+            "s1",
+            "s3",
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "outcome": "output",
+          "explain": "The sentinel shows up within a fraction of a second; output 'hello' is returned as a CLIResult.",
+          "brief": "Claude runs a quick command that prints one word.",
+          "facts": [
+            "command: echo hello",
+            "no restart flag",
+            "shell is healthy",
+            "finishes in under a second"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Long sleep",
+          "input": "command='sleep 300'",
+          "path": [
+            "s1",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7"
+          ],
+          "outcome": "timeout",
+          "explain": "No sentinel after 120s, so _timed_out is set and a ToolError tells Claude the tool must be restarted.",
+          "brief": "Claude runs a command that sleeps for five minutes.",
+          "facts": [
+            "command: sleep 300",
+            "no restart flag",
+            "shell is healthy",
+            "wait limit: 120 seconds"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Next command after a timeout",
+          "input": "command='ls' right after the sleep timed out",
+          "path": [
+            "s1",
+            "s3",
+            "s4"
+          ],
+          "outcome": "must-restart",
+          "explain": "The session still has _timed_out=True, so every command is refused until restart.",
+          "brief": "Claude runs a new command right after the last one timed out.",
+          "facts": [
+            "command: ls",
+            "no restart flag",
+            "shell still running",
+            "last command timed out"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Restart",
+          "input": "restart=true",
+          "path": [
+            "s1",
+            "s2"
+          ],
+          "outcome": "restarted",
+          "explain": "The old shell is terminated and a fresh _BashSession is started; result says 'tool has been restarted.'",
+          "brief": "Claude asks for the shell to be restarted.",
+          "facts": [
+            "restart: true",
+            "no command given"
+          ]
+        }
+      ]
+    }
+  ],
+  "quests": [
+    {
+      "id": "q1",
+      "type": "trace",
+      "title": "Ride the loop",
+      "prompt": "Watch one full sampling loop: your message, Claude's tool call, the tool result, and the final answer.",
+      "target": "sampling-turn",
+      "xp": 10
+    },
+    {
+      "id": "q2",
+      "type": "quiz",
+      "title": "Where did my limit go?",
+      "prompt": "Provider is Anthropic and the sidebar says 'Only send N most recent images' = 3. After 10 screenshots, how many screenshots are sent to Claude?",
+      "options": [
+        "3",
+        "All 10, because trimming is turned off to keep the prompt cache",
+        "0",
+        "7"
+      ],
+      "answer": 1,
+      "explain": "When provider is Anthropic, the loop sets only_n_most_recent_images = 0 because cached reads are cheaper than breaking the cache.",
+      "xp": 25
+    },
+    {
+      "id": "q3",
+      "type": "predict",
+      "title": "Three of a kind",
+      "prompt": "Claude asks to replace 'return None' but the file has it on 3 lines. What happens?",
+      "target": "edit-str-replace/c3",
+      "options": [
+        "File edited, snippet returned",
+        "Rejected: bad path",
+        "Rejected: old_str missing",
+        "Rejected: old_str not found",
+        "Rejected: old_str not unique"
+      ],
+      "answer": 4,
+      "explain": "occurrences > 1, so edit-checks raises a ToolError listing the line numbers.",
+      "xp": 20
+    },
+    {
+      "id": "q4",
+      "type": "predict",
+      "title": "Stuck shell",
+      "prompt": "A 'sleep 300' just timed out. Claude now sends command='ls'. What does it get?",
+      "target": "bash-command/c3",
+      "options": [
+        "Output returned",
+        "Timed out, must restart",
+        "Refused: session already timed out",
+        "Error: bash has exited",
+        "Shell restarted",
+        "Error: no command provided"
+      ],
+      "answer": 2,
+      "explain": "_timed_out stays True on the session, so every new command raises a ToolError until Claude calls bash with restart: true.",
+      "xp": 20
+    },
+    {
+      "id": "q5",
+      "type": "quiz",
+      "title": "Domino clicks",
+      "prompt": "With computer_toolset_20260801, Claude sends three member calls in one reply and the first one fails. What happens to the other two?",
+      "options": [
+        "They run anyway",
+        "They get a 'Not executed: an earlier computer action in this turn failed.' error without running",
+        "The loop stops and returns to you",
+        "They are retried once"
+      ],
+      "answer": 1,
+      "explain": "member_call_failed is set after the first failure; later member calls get NOT_EXECUTED_ERROR as a ToolFailure.",
+      "xp": 25
+    },
+    {
+      "id": "q6",
+      "type": "quiz",
+      "title": "Who reads the history?",
+      "prompt": "The edit tool saves the old file text in _file_history on every edit. What uses it?",
+      "options": [
+        "The undo_edit command",
+        "Nothing: text_editor_20250728 has no undo_edit, so it is only written",
+        "The sidebar shows it",
+        "It is sent to Claude each turn"
+      ],
+      "answer": 1,
+      "explain": "The docstring says this version does not support undo_edit, and no code reads _file_history.",
+      "xp": 20
+    },
+    {
+      "id": "q7",
+      "type": "quiz",
+      "title": "When does it stop?",
+      "prompt": "Besides an API error, when does sampling_loop return on its own?",
+      "options": [
+        "After 10 turns",
+        "When Claude's reply has no tool_use blocks",
+        "When any tool returns an error",
+        "When the screenshot count hits N"
+      ],
+      "answer": 1,
+      "explain": "If tool_result_content is empty after scanning the reply, the loop returns. Tool errors are sent back and the loop continues.",
+      "xp": 20
+    }
+  ],
+  "cracks": [
+    {
+      "id": "k1",
+      "at": "computer-tool",
+      "severity": "medium",
+      "title": "Out-of-bounds check uses the wrong size",
+      "hint": "Claude's coordinates are in screenshot pixels. What size are they compared to?",
+      "finding": "scale_coordinates checks API coordinates against the real screen size (self.width/height), not the smaller screenshot size. On a 1920x1080 screen the screenshot is 1366x768, so x=1500 passes the check and is scaled up to about 2108, which is off the screen.",
+      "suggestion": "Compare API coordinates against target_dimension (the screenshot size) before scaling up.",
+      "decoys": [
+        "Scaling rounds coordinates instead of flooring them",
+        "Typing is split into 50-character chunks",
+        "The 2-second screenshot delay is too short"
+      ],
+      "source": {
+        "file": "computer-use-demo/computer_use_demo/tools/computer.py",
+        "lines": [
+          294,
+          300
+        ],
+        "anchor": "if x > self.width or y > self.height:"
+      }
+    },
+    {
+      "id": "k2",
+      "at": "bash-tool",
+      "severity": "medium",
+      "title": "Bash output is never cut down",
+      "hint": "run.py has a 16000 character limit. Does the bash session use it?",
+      "finding": "_BashSession.run returns the whole stdout and stderr buffer with no maybe_truncate. A command like 'cat big.log' puts all of it into the conversation, which can blow the context window and cost a lot, and it is resent every turn.",
+      "suggestion": "Pass output and error through maybe_truncate (MAX_RESPONSE_LEN) like the edit and computer tools do.",
+      "decoys": [
+        "The sentinel '<<exit>>' could be printed by the command itself",
+        "The 0.2s poll delay makes commands slow",
+        "stderr is read after stdout"
+      ],
+      "source": {
+        "file": "computer-use-demo/computer_use_demo/tools/bash.py",
+        "lines": [
+          72,
+          101
+        ],
+        "anchor": "output = self._process.stdout._buffer.decode()"
+      }
+    },
+    {
+      "id": "k3",
+      "at": "tool-errors",
+      "severity": "low",
+      "title": "A bad ToolError call crashes the loop",
+      "hint": "ToolError takes one argument called message. Look at the 'must be a string' check.",
+      "finding": "computer.py raises ToolError(output=...), but ToolError.__init__ only accepts message. If Claude sends non-string text for key/type, Python raises TypeError instead. The router only catches ToolError, so the TypeError escapes sampling_loop and crashes the Streamlit run instead of going back to Claude.",
+      "suggestion": "Use ToolError(f\"{text} must be a string\"), and consider catching Exception in ToolCollection.run.",
+      "decoys": [
+        "Unknown tool names are not reported",
+        "is_error is never set on failures",
+        "ToolFailure loses the error text"
+      ],
+      "source": {
+        "file": "computer-use-demo/computer_use_demo/tools/computer.py",
+        "lines": [
+          158,
+          164
+        ],
+        "anchor": "raise ToolError(output=f\"{text} must be a string\")"
+      }
+    }
+  ]
+}

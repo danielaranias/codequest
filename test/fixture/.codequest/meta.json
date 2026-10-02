@@ -1,0 +1,18 @@
+{
+ "repo": {
+  "name": "fixture"
+ },
+ "summary": "A tiny app.",
+ "worldOrder": [
+  "one",
+  "two"
+ ],
+ "bridges": [
+  {
+   "from": "one",
+   "to": "two",
+   "label": "handled items"
+  }
+ ],
+ "uncharted": []
+}

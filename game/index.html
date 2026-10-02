@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CodeQuest</title>
+<link rel="stylesheet" href="style.css">
+<!--CW:HEAD-->
+</head>
+<body>
+<div id="app">
+  <canvas id="stage" tabindex="0" aria-label="Game map. Use arrow keys or WASD to move, E to interact."></canvas>
+
+  <header class="hud-top">
+    <div class="where">
+      <button id="btn-sail" class="btn ghost" hidden title="Back to the sea (M)">Set sail</button>
+      <div class="crumbs"><span id="crumb-repo"></span><span id="crumb-world"></span></div>
+      <button id="sync-chip" class="chip" type="button"></button>
+    </div>
+    <div class="me">
+      <div class="xp" title="Experience">
+        <span id="lvl"></span>
+        <div class="bar"><i id="xpbar"></i></div>
+      </div>
+      <span id="mastery" class="mastery" title="How much of the codebase you have explored and proven you understand"></span>
+      <nav class="tabs">
+        <button class="btn ghost" data-pane="quests">Quests <kbd>Q</kbd></button>
+        <button class="btn ghost" data-pane="notes">Notes <kbd>N</kbd></button>
+        <button class="btn ghost" data-pane="badges">Badges</button>
+        <button class="btn ghost" id="btn-sound" type="button">Sound on</button>
+      </nav>
+    </div>
+  </header>
+
+  <div id="guide" class="guide" hidden aria-live="polite"></div>
+  <div id="edge-arrow" class="edge-arrow" hidden></div>
+  <aside id="screen" class="screenp" hidden aria-label="What the user sees">
+    <div class="sp-head"><span>What the user sees</span><b id="sp-name"></b></div>
+    <div id="sp-device" class="device"></div>
+    <div id="sp-note" class="sp-note"></div>
+  </aside>
+  <div id="hint" class="hint" hidden></div>
+  <div id="caption" class="caption" hidden></div>
+
+  <section id="dock" class="dock" hidden aria-label="Flows in this world"></section>
+
+  <aside id="drawer" class="drawer" hidden>
+    <button class="drawer-close btn ghost" id="drawer-close" aria-label="Close panel">Close</button>
+    <div id="drawer-body"></div>
+  </aside>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="modal" class="modal" hidden></div>
+  <div id="intro" class="intro" hidden></div>
+  <div id="boot" class="boot">Charting the code…</div>
+</div>
+<!--CW:SCRIPTS-->
+<script src="js/util.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/render.js"></script>
+<script src="js/backend.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/mission.js"></script>
+<script src="js/guide.js"></script>
+<script src="js/ui-core.js"></script>
+<script src="js/ui-hud.js"></script>
+<script src="js/ui-entity.js"></script>
+<script src="js/ui-dock.js"></script>
+<script src="js/ui-change.js"></script>
+<script src="js/ui-caption.js"></script>
+<script src="js/ui-quests.js"></script>
+<script src="js/ui-notes.js"></script>
+<script src="js/ui-sync.js"></script>
+<script src="js/ui-init.js"></script>
+<script src="js/main.js"></script>
+<!--/CW:SCRIPTS-->
+</body>
+</html>

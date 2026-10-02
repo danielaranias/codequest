@@ -1,0 +1,1851 @@
+{
+  "id": "support-harbor",
+  "name": "customer-support-agent",
+  "theme": "ocean",
+  "tagline": "Where questions sail in, dive for answers, and sometimes ask for a human",
+  "summary": "A Next.js customer support chat. The browser sends the chat to one API route, which searches an AWS Bedrock knowledge base, asks Claude to answer in strict JSON (answer, mood, categories, hand-off flag), and checks that JSON. The page shows the answer, and two optional sidebars show Claude's reasoning and the sources it used.",
+  "paths": [
+    "customer-support-agent/app/page.tsx",
+    "customer-support-agent/app/api/chat/route.ts",
+    "customer-support-agent/app/lib/utils.ts",
+    "customer-support-agent/app/lib/customer_support_categories.json",
+    "customer-support-agent/components/ChatArea.tsx",
+    "customer-support-agent/components/LeftSidebar.tsx",
+    "customer-support-agent/components/RightSidebar.tsx",
+    "customer-support-agent/components/FullSourceModal.tsx",
+    "customer-support-agent/config.ts"
+  ],
+  "districts": [
+    {
+      "id": "dock",
+      "name": "Chat Dock"
+    },
+    {
+      "id": "gate",
+      "name": "Harbor Gate"
+    },
+    {
+      "id": "depths",
+      "name": "Knowledge Depths"
+    },
+    {
+      "id": "lighthouse",
+      "name": "Lighthouse"
+    },
+    {
+      "id": "lookout",
+      "name": "Lookout Towers"
+    }
+  ],
+  "entities": [
+    {
+      "id": "home-page",
+      "kind": "entry",
+      "name": "Home page",
+      "district": "dock",
+      "summary": "The one page of the app. It shows the top bar, the chat in the middle, and the two side panels if they are turned on.",
+      "details": "- Left and right sidebars load only in the browser (ssr: false)\n- Each sidebar shows only if its env flag is exactly \"true\"\n- Flags: NEXT_PUBLIC_INCLUDE_LEFT_SIDEBAR and NEXT_PUBLIC_INCLUDE_RIGHT_SIDEBAR",
+      "source": [
+        {
+          "file": "customer-support-agent/app/page.tsx",
+          "lines": [
+            14,
+            25
+          ],
+          "anchor": "export default function Home() {"
+        },
+        {
+          "file": "customer-support-agent/config.ts",
+          "lines": [
+            6,
+            9
+          ],
+          "anchor": "includeLeftSidebar: process.env.NEXT_PUBLIC_INCLUDE_LEFT_SIDEBAR === \"true\","
+        }
+      ]
+    },
+    {
+      "id": "chat-area",
+      "kind": "ui",
+      "name": "Chat area",
+      "district": "dock",
+      "summary": "The chat box where the user types. It sends the whole chat history to the server and swaps in the answer when it comes back.",
+      "details": "- Adds your message plus an empty 'Thinking...' placeholder right away\n- POSTs messages, chosen model and chosen knowledge base id to /api/chat\n- On success, replaces the placeholder with the answer JSON\n- Fires window events 'updateSidebar' and 'updateRagSources' for the side panels\n- Clicking a suggested question sends it as a new message",
+      "source": [
+        {
+          "file": "customer-support-agent/components/ChatArea.tsx",
+          "lines": [
+            402,
+            539
+          ],
+          "anchor": "const handleSubmit = async ("
+        },
+        {
+          "file": "customer-support-agent/components/ChatArea.tsx",
+          "lines": [
+            444,
+            455
+          ],
+          "anchor": "const response = await fetch(\"/api/chat\", {"
+        }
+      ]
+    },
+    {
+      "id": "model-kb-options",
+      "kind": "config",
+      "name": "Model and knowledge base picker",
+      "district": "dock",
+      "summary": "Two drop-downs in the chat header. They pick which Claude model answers and which knowledge base is searched.",
+      "details": "- Default model is claude-haiku-4-5-20251001\n- Three models are listed: Claude 3 Haiku, Claude 4.5 Haiku, Claude 3.5 Sonnet\n- The knowledge base list is a placeholder ('your-knowledge-base-id') you must edit\n- Both choices are sent with every request",
+      "source": [
+        {
+          "file": "customer-support-agent/components/ChatArea.tsx",
+          "lines": [
+            305,
+            322
+          ],
+          "anchor": "useState(\"claude-haiku-4-5-20251001\")"
+        }
+      ]
+    },
+    {
+      "id": "chat-route",
+      "kind": "entry",
+      "name": "Chat API route",
+      "district": "gate",
+      "summary": "The server door at POST /api/chat. It runs the whole job: search the knowledge base, ask Claude, check the answer, send it back.",
+      "details": "- Reads messages, model and knowledgeBaseId straight from the request body\n- Uses only the latest message as the search query\n- Sends RAG sources back in an 'x-rag-sources' header\n- Sends a short debug blob in an 'X-Debug-Data' header\n- Gives each answer a fresh random id",
+      "source": [
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            64,
+            73
+          ],
+          "anchor": "export async function POST(req: Request) {"
+        },
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            265,
+            286
+          ],
+          "anchor": "\"x-rag-sources\","
+        }
+      ]
+    },
+    {
+      "id": "answer-check",
+      "kind": "guardrail",
+      "name": "Answer shape check",
+      "district": "gate",
+      "summary": "Makes sure Claude's reply is real JSON with the right fields. If anything breaks, the user gets a polite 'sorry' with status 500.",
+      "details": "- First escapes raw newlines inside string values, then JSON.parse\n- Then a Zod schema checks every field and the allowed mood words\n- Any error (API, parse, schema) lands in one catch block\n- The catch returns a fixed sorry message, status 500",
+      "source": [
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            198,
+            210
+          ],
+          "anchor": "function sanitizeAndParseJSON(jsonString : string) {"
+        },
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            21,
+            45
+          ],
+          "anchor": "const responseSchema = z.object({"
+        },
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            287,
+            301
+          ],
+          "anchor": "\"Sorry, there was an issue processing your request. Please try again later.\","
+        }
+      ],
+      "guard": {
+        "rule": "Claude's answer must be valid JSON that matches the response schema",
+        "checks": "JSON.parse after newline fix, then responseSchema.parse (user_mood must be one of 6 words, debug.context_used required)",
+        "onFail": "Throws, and the route returns a fixed 'Sorry, there was an issue...' body with status 500"
+      }
+    },
+    {
+      "id": "retrieval-limits",
+      "kind": "guardrail",
+      "name": "Retrieval limits",
+      "district": "depths",
+      "summary": "Rules that keep the knowledge base search small and safe. No id means no search; at most 3 chunks are fetched; only 1 is shown as a source.",
+      "details": "- Missing knowledgeBaseId: returns empty context and isRagWorking false\n- Asks Bedrock for numberOfResults n = 3\n- Drops chunks that have no text\n- All kept chunks go into the prompt, but only the first is sent to the sidebar (.slice(0, 1))\n- Any error is caught and turned into an empty result",
+      "source": [
+        {
+          "file": "customer-support-agent/app/lib/utils.ts",
+          "lines": [
+            41,
+            49
+          ],
+          "anchor": "if (!knowledgeBaseId) {"
+        },
+        {
+          "file": "customer-support-agent/app/lib/utils.ts",
+          "lines": [
+            63,
+            77
+          ],
+          "anchor": ".slice(0, 1);"
+        }
+      ],
+      "guard": {
+        "rule": "Search only with a knowledge base id, and fetch at most 3 chunks",
+        "checks": "knowledgeBaseId is truthy; numberOfResults: n (default 3); chunks must have content.text",
+        "onFail": "Returns { context: '', isRagWorking: false, ragSources: [] } so Claude is told 'No information found'"
+      }
+    },
+    {
+      "id": "retrieve-context",
+      "kind": "skill",
+      "name": "Knowledge search (RAG)",
+      "district": "depths",
+      "summary": "Looks up the user's latest message in the knowledge base and returns matching text. This text is pasted into Claude's instructions.",
+      "details": "- Runs before Claude is called, every time (it is not a tool Claude chooses)\n- Turns each result into a source: id, file name, snippet, score\n- File name is cleaned: underscores become spaces, '.txt' removed\n- Joins all chunk texts with blank lines into one context string",
+      "source": [
+        {
+          "file": "customer-support-agent/app/lib/utils.ts",
+          "lines": [
+            31,
+            95
+          ],
+          "anchor": "export async function retrieveContext("
+        },
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            90,
+            115
+          ],
+          "anchor": "const result = await retrieveContext(latestMessage, knowledgeBaseId);"
+        }
+      ]
+    },
+    {
+      "id": "bedrock-kb",
+      "kind": "external",
+      "name": "AWS Bedrock knowledge base",
+      "district": "depths",
+      "summary": "Amazon's hosted vector search. It holds your support documents and returns the closest chunks for a query.",
+      "details": "- Client is fixed to region us-east-1\n- Uses BAWS_ACCESS_KEY_ID and BAWS_SECRET_ACCESS_KEY env vars\n- At startup it only logs whether those keys exist; it does not stop the app\n- Called with a RetrieveCommand",
+      "source": [
+        {
+          "file": "customer-support-agent/app/lib/utils.ts",
+          "lines": [
+            9,
+            18
+          ],
+          "anchor": "const bedrockClient = new BedrockAgentRuntimeClient({"
+        },
+        {
+          "file": "customer-support-agent/app/lib/utils.ts",
+          "lines": [
+            58,
+            59
+          ],
+          "anchor": "const response = await bedrockClient.send(command);"
+        }
+      ]
+    },
+    {
+      "id": "categories-store",
+      "kind": "store",
+      "name": "Support categories",
+      "district": "depths",
+      "summary": "A JSON list of 8 support categories, like billing or technical. Claude is asked to tag each question with matching ones.",
+      "details": "- Ids: account, billing, feature, internal, legal, other, technical, usage\n- Each has keywords, but only the ids are sent to Claude\n- USE_CATEGORIES = true turns the tagging on\n- The left sidebar shows an icon for each known id",
+      "source": [
+        {
+          "file": "customer-support-agent/app/lib/customer_support_categories.json",
+          "lines": [
+            1,
+            20
+          ],
+          "anchor": "\"categories\": ["
+        },
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            119,
+            132
+          ],
+          "anchor": "const USE_CATEGORIES = true;"
+        }
+      ]
+    },
+    {
+      "id": "system-prompt",
+      "kind": "config",
+      "name": "Support system prompt",
+      "district": "lighthouse",
+      "summary": "The instructions Claude gets. It pastes in the knowledge base text, lists the categories, sets the redirect rules and the exact JSON shape to reply in.",
+      "details": "- Says: only use the information given\n- If RAG failed, it says 'No information found for this query.'\n- Redirect to a human if no info, off-topic, or the user asks for a person\n- Includes two full JSON examples (normal and redirect)\n- Company is hard-coded as Anthropic; change it for your use",
+      "source": [
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            134,
+            196
+          ],
+          "anchor": "const systemPrompt = `You are acting as an Anthropic customer support assistant"
+        }
+      ]
+    },
+    {
+      "id": "support-assistant",
+      "kind": "agent",
+      "name": "Support assistant",
+      "district": "lighthouse",
+      "summary": "Claude acting as the first-line support agent. It reads the chat, answers in JSON, guesses the user's mood and suggests follow-up questions.",
+      "details": "- Gets the full chat history from the browser\n- The route adds an assistant turn with just '{' so Claude starts straight in JSON\n- max_tokens 1000, temperature 0.3\n- The '{' is glued back on before parsing\n- Has no tools; search is done for it beforehand",
+      "source": [
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            212,
+            241
+          ],
+          "anchor": "anthropicMessages.push({"
+        }
+      ],
+      "agent": {
+        "role": "First point of contact: answers from the knowledge base, tags categories, rates mood, decides when to hand off to a human",
+        "model": "claude-haiku-4-5-20251001 (default; user can switch in the picker)",
+        "tools": [],
+        "prompt": "system-prompt"
+      }
+    },
+    {
+      "id": "anthropic-api",
+      "kind": "external",
+      "name": "Anthropic API",
+      "district": "lighthouse",
+      "summary": "Claude's servers. The route calls messages.create once per user message.",
+      "details": "- Key comes from ANTHROPIC_API_KEY\n- No check that the key exists before calling\n- The model name is whatever the browser sent",
+      "source": [
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            7,
+            9
+          ],
+          "anchor": "const anthropic = new Anthropic({"
+        },
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            226,
+            232
+          ],
+          "anchor": "const response = await anthropic.messages.create({"
+        }
+      ]
+    },
+    {
+      "id": "redirect-rule",
+      "kind": "guardrail",
+      "name": "Hand-off to human rule",
+      "district": "lookout",
+      "summary": "When Claude says a human is needed, the server logs it and the chat shows a 'Talk to a human' button.",
+      "details": "- The decision is made by Claude (redirect_to_agent.should_redirect), following the prompt rules\n- Server only logs 'AGENT REDIRECT TRIGGERED!'\n- Browser fires 'agentRedirectRequested' and shows the button\n- Clicking fires 'humanAgentRequested' with mood hard-set to 'frustrated'",
+      "source": [
+        {
+          "file": "customer-support-agent/components/ChatArea.tsx",
+          "lines": [
+            58,
+            87
+          ],
+          "anchor": "if (redirectToAgent.should_redirect) {"
+        },
+        {
+          "file": "customer-support-agent/app/api/chat/route.ts",
+          "lines": [
+            259,
+            263
+          ],
+          "anchor": "if (responseWithId.redirect_to_agent?.should_redirect) {"
+        },
+        {
+          "file": "customer-support-agent/components/ChatArea.tsx",
+          "lines": [
+            524,
+            530
+          ],
+          "anchor": "if (data.redirect_to_agent && data.redirect_to_agent.should_redirect) {"
+        }
+      ],
+      "guard": {
+        "rule": "Hand the user to a human when Claude cannot or should not answer",
+        "checks": "redirect_to_agent.should_redirect === true in Claude's JSON",
+        "onFail": "Shows a 'Talk to a human' button and fires browser events (no code listens to them)"
+      }
+    },
+    {
+      "id": "message-view",
+      "kind": "ui",
+      "name": "Message bubble",
+      "district": "lookout",
+      "summary": "Draws one chat bubble. For the assistant it parses the stored JSON, shows a spinner while empty, then the answer as markdown.",
+      "details": "- Empty response means 'Thinking...' spinner\n- A 30 second timer flips to 'Something went wrong' if nothing arrives\n- Renders markdown with raw HTML allowed (rehypeRaw) and code highlighting\n- Shows suggested question chips under each assistant bubble",
+      "source": [
+        {
+          "file": "customer-support-agent/components/ChatArea.tsx",
+          "lines": [
+            118,
+            191
+          ],
+          "anchor": "const MessageContent = ({"
+        },
+        {
+          "file": "customer-support-agent/components/ChatArea.tsx",
+          "lines": [
+            89,
+            116
+          ],
+          "anchor": "const SuggestedQuestions = ({"
+        }
+      ]
+    },
+    {
+      "id": "thinking-sidebar",
+      "kind": "ui",
+      "name": "Thinking sidebar",
+      "district": "lookout",
+      "summary": "Left panel that shows Claude's private reasoning, the user's mood, whether context was used, and the matched categories.",
+      "details": "- Listens for the 'updateSidebar' event\n- Skips entries with a repeated id\n- Keeps the newest 15 entries\n- Mood colors: green positive, red negative, orange frustrated, and so on",
+      "source": [
+        {
+          "file": "customer-support-agent/components/LeftSidebar.tsx",
+          "lines": [
+            45,
+            93
+          ],
+          "anchor": "const handleUpdateSidebar = (event: CustomEvent<ThinkingContent>) => {"
+        }
+      ]
+    },
+    {
+      "id": "sources-sidebar",
+      "kind": "ui",
+      "name": "Sources sidebar",
+      "district": "lookout",
+      "summary": "Right panel that lists which knowledge base snippet was used for each question, with a match score and a 'view full' popup.",
+      "details": "- Listens for the 'updateRagSources' event\n- Only adds an entry if there are sources AND Claude said context_used = true\n- Score color: green above 60%, yellow above 40%, red below\n- Keeps the newest 15 queries",
+      "source": [
+        {
+          "file": "customer-support-agent/components/RightSidebar.tsx",
+          "lines": [
+            51,
+            94
+          ],
+          "anchor": "const shouldDisplaySources = debug?.context_used;"
+        },
+        {
+          "file": "customer-support-agent/components/FullSourceModal.tsx",
+          "lines": [
+            18,
+            46
+          ],
+          "anchor": "const FullSourceModal: React.FC<FullSourceModalProps> = ({"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "answer-question",
+      "name": "Server answers a question",
+      "trigger": "Browser POSTs to /api/chat after the user hits Send",
+      "summary": "The route searches the knowledge base (or skips it), builds the prompt, asks Claude, checks the JSON and sends it back.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "chat-route",
+          "action": "Reads messages, model and knowledgeBaseId; takes the last message as the query",
+          "carries": "{ messages: [...], model: 'claude-haiku-4-5-20251001', knowledgeBaseId: 'KB123' }",
+          "source": {
+            "file": "customer-support-agent/app/api/chat/route.ts",
+            "lines": [
+              69,
+              70
+            ],
+            "anchor": "const latestMessage = messages[messages.length - 1].content;"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "POST /api/chat",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: /api/chat"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "📝 Latest Query: <the question>",
+                  "🔍 Initiating RAG retrieval for query: <the question>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "The browser shows a spinner and \"Thinking...\" while this runs.",
+                "state": "muted"
+              }
+            ],
+            "note": "No server screen: the request arrives and its last message is logged."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "retrieval-limits",
+          "action": "Checks a knowledge base id was given",
+          "source": {
+            "file": "customer-support-agent/app/lib/utils.ts",
+            "lines": [
+              41,
+              48
+            ],
+            "anchor": "if (!knowledgeBaseId) {"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "knowledgeBaseId is set"
+            },
+            {
+              "to": "s4",
+              "when": "knowledgeBaseId is empty (search skipped)"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "bedrock-kb",
+          "action": "Asks Bedrock for the 3 closest chunks and joins their text",
+          "carries": "{ context: 'To rotate your API key...', ragSources: [1 source] }",
+          "source": {
+            "file": "customer-support-agent/app/lib/utils.ts",
+            "lines": [
+              50,
+              59
+            ],
+            "anchor": "vectorSearchConfiguration: { numberOfResults: n },"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "always (errors become empty context)"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "system-prompt",
+          "action": "Builds the prompt: pastes context (or 'No information found'), category ids, redirect rules and the JSON format",
+          "source": {
+            "file": "customer-support-agent/app/api/chat/route.ts",
+            "lines": [
+              137,
+              138
+            ],
+            "anchor": "${isRagWorking ? `${retrievedContext}` : \"No information found for this query.\"}"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s5",
+          "at": "support-assistant",
+          "action": "Sends history plus a '{' prefill to Claude and glues the '{' back on the reply",
+          "source": {
+            "file": "customer-support-agent/app/api/chat/route.ts",
+            "lines": [
+              221,
+              241
+            ],
+            "anchor": "const textContent = \"{\" + response.content"
+          },
+          "next": [
+            {
+              "to": "s6",
+              "when": "Claude replies"
+            },
+            {
+              "to": "outcome:failed",
+              "when": "API call throws (bad model name, missing key)"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "answer-check",
+          "action": "Fixes newlines, parses JSON, validates with the Zod schema",
+          "source": {
+            "file": "customer-support-agent/app/api/chat/route.ts",
+            "lines": [
+              243,
+              252
+            ],
+            "anchor": "const validatedResponse = responseSchema.parse(parsedResponse);"
+          },
+          "next": [
+            {
+              "to": "s7",
+              "when": "JSON valid and matches schema"
+            },
+            {
+              "to": "outcome:failed",
+              "when": "bad JSON or a field is wrong"
+            }
+          ]
+        },
+        {
+          "id": "s7",
+          "at": "redirect-rule",
+          "action": "Adds an id; logs a warning if Claude asked for a human",
+          "source": {
+            "file": "customer-support-agent/app/api/chat/route.ts",
+            "lines": [
+              259,
+              263
+            ],
+            "anchor": "if (responseWithId.redirect_to_agent?.should_redirect) {"
+          },
+          "next": [
+            {
+              "to": "outcome:answered",
+              "when": "should_redirect is false or missing"
+            },
+            {
+              "to": "outcome:handoff",
+              "when": "should_redirect is true"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "answered",
+          "label": "Answer sent back (200)",
+          "kind": "success",
+          "screen": {
+            "name": "POST /api/chat",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: /api/chat"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "✅ Message generation completed",
+                  "⏱️ [<time>] API Complete: <seconds>s"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "200: answer JSON sent to the browser",
+                "state": "ok"
+              }
+            ],
+            "note": "The answer goes back with status 200."
+          }
+        },
+        {
+          "id": "handoff",
+          "label": "Answer with hand-off to human (200)",
+          "kind": "blocked",
+          "screen": {
+            "name": "POST /api/chat",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: /api/chat"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "✅ Message generation completed",
+                  "🚨 AGENT REDIRECT TRIGGERED!",
+                  "Reason: <the reason>",
+                  "⏱️ [<time>] API Complete: <seconds>s"
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "200: answer JSON sent, with redirect_to_agent",
+                "state": "active"
+              }
+            ],
+            "note": "Same 200 answer, plus a warning in the log that a human was asked for."
+          }
+        },
+        {
+          "id": "failed",
+          "label": "Sorry message with status 500",
+          "kind": "error",
+          "screen": {
+            "name": "POST /api/chat",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: /api/chat"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "💥 Error in message generation: <the error>"
+                ],
+                "state": "error"
+              },
+              {
+                "t": "banner",
+                "text": "500: \"Sorry, there was an issue processing your request. Please try again later.\"",
+                "state": "error"
+              }
+            ],
+            "note": "The catch logs the error and sends the sorry message with status 500."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Question the docs cover",
+          "input": "\"How do I rotate my API key?\" with knowledgeBaseId 'KB123'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7"
+          ],
+          "outcome": "answered",
+          "explain": "Bedrock finds matching text, Claude answers from it in valid JSON, no hand-off needed.",
+          "brief": "A user asks how to change a key, and the help docs cover it.",
+          "facts": [
+            "knowledge base: KB123",
+            "docs match the question",
+            "reply is valid JSON",
+            "no human needed"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "No knowledge base, user wants a person",
+          "input": "\"Can I speak to a real person?\" with knowledgeBaseId ''",
+          "path": [
+            "s1",
+            "s2",
+            "s4",
+            "s5",
+            "s6",
+            "s7"
+          ],
+          "outcome": "handoff",
+          "explain": "Search is skipped, the prompt says 'No information found', and the user asked for a human, so Claude sets should_redirect true.",
+          "brief": "A user asks for a real person, and no knowledge base is picked.",
+          "facts": [
+            "no knowledge base id",
+            "reply is valid JSON",
+            "user asks for a person"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Claude invents a mood",
+          "input": "Claude replies with user_mood: \"angry\"",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "outcome": "failed",
+          "explain": "'angry' is not one of the 6 allowed moods, so the Zod check throws and the catch returns the sorry message.",
+          "brief": "The assistant replies with a mood word that is not on the allowed list.",
+          "facts": [
+            "knowledge base: KB123",
+            "assistant replies",
+            "mood: \"angry\"",
+            "6 moods allowed"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Unknown model name",
+          "input": "model: 'claude-unknown-model' sent in the body",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5"
+          ],
+          "outcome": "failed",
+          "explain": "The route passes the model name through untouched; the Anthropic API rejects it and the catch returns 500.",
+          "brief": "The browser sends a model name that does not exist.",
+          "facts": [
+            "knowledge base: KB123",
+            "model: claude-unknown-model",
+            "name passed on unchanged"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "show-reply",
+      "name": "Browser shows the reply",
+      "trigger": "User presses Enter or clicks Send Message",
+      "summary": "The chat area shows a placeholder, waits for the server, then updates the bubble and both sidebars, or waits out a timer on error.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "chat-area",
+          "action": "Adds the user message and an empty assistant placeholder, then POSTs to /api/chat",
+          "carries": "{ messages: [...history, userMessage], model, knowledgeBaseId }",
+          "source": {
+            "file": "customer-support-agent/components/ChatArea.tsx",
+            "lines": [
+              421,
+              438
+            ],
+            "anchor": "const placeholderMessage = {"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "ChatArea",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "AI Agent · Customer support"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "spinner",
+                "text": "Thinking..."
+              },
+              {
+                "t": "input",
+                "text": "Type your message here...",
+                "items": "",
+                "state": "disabled"
+              },
+              {
+                "t": "button",
+                "text": "Send Message",
+                "state": "loading"
+              }
+            ],
+            "note": "Your message appears, a \"Thinking...\" bubble follows it, and the box locks."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "chat-route",
+          "action": "Server does its work and answers",
+          "next": [
+            {
+              "to": "s3",
+              "when": "status 200"
+            },
+            {
+              "to": "s8",
+              "when": "status 500 (or network error)"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "sources-sidebar",
+          "action": "If an x-rag-sources header came back, logs the source, but only when Claude said context_used",
+          "source": {
+            "file": "customer-support-agent/components/ChatArea.tsx",
+            "lines": [
+              480,
+              497
+            ],
+            "anchor": "const ragHeader = response.headers.get(\"x-rag-sources\");"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "RightSidebar",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Knowledge Base History"
+              },
+              {
+                "t": "text",
+                "text": "<your question>",
+                "state": "muted"
+              },
+              {
+                "t": "card",
+                "text": "<first 100 characters of the source>...",
+                "items": [
+                  "<score>% match",
+                  "<file name>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "Shown only when the answer says context was used; otherwise: \"The assistant will display sources here once finding them\"",
+                "state": "muted"
+              }
+            ],
+            "note": "A source card may appear in the right sidebar."
+          }
+        },
+        {
+          "id": "s4",
+          "at": "thinking-sidebar",
+          "action": "Placeholder is replaced; 'updateSidebar' event shows thinking, mood and categories",
+          "source": {
+            "file": "customer-support-agent/components/ChatArea.tsx",
+            "lines": [
+              502,
+              522
+            ],
+            "anchor": "const sidebarEvent = new CustomEvent(\"updateSidebar\", {"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "LeftSidebar",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Assistant Thinking"
+              },
+              {
+                "t": "card",
+                "text": "<the assistant's thinking>"
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "<Mood>",
+                  "Context: ✅ or ❌"
+                ]
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "<Matched category>"
+                ]
+              }
+            ],
+            "note": "The left sidebar gets a new card with thinking, mood and categories."
+          }
+        },
+        {
+          "id": "s5",
+          "at": "redirect-rule",
+          "action": "Checks redirect_to_agent.should_redirect in the answer",
+          "next": [
+            {
+              "to": "s6",
+              "when": "should_redirect is true"
+            },
+            {
+              "to": "s7",
+              "when": "false or missing"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "message-view",
+          "action": "Shows the answer plus a 'Talk to a human' button; clicking fires an event no code listens to",
+          "source": {
+            "file": "customer-support-agent/components/ChatArea.tsx",
+            "lines": [
+              63,
+              78
+            ],
+            "anchor": "const event = new CustomEvent(\"humanAgentRequested\", {"
+          },
+          "next": [
+            {
+              "to": "outcome:human-button",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "ChatArea",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "AI Agent · Customer support"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "card",
+                "text": "<the answer>"
+              },
+              {
+                "t": "button",
+                "text": "Talk to a human",
+                "state": "active"
+              },
+              {
+                "t": "input",
+                "text": "Type your message here..."
+              },
+              {
+                "t": "button",
+                "text": "Send Message",
+                "state": "disabled"
+              }
+            ],
+            "note": "The answer bubble comes with a \"Talk to a human\" button."
+          }
+        },
+        {
+          "id": "s7",
+          "at": "message-view",
+          "action": "Renders the answer as markdown and shows suggested question chips",
+          "source": {
+            "file": "customer-support-agent/components/ChatArea.tsx",
+            "lines": [
+              181,
+              190
+            ],
+            "anchor": "{parsed.response || content}"
+          },
+          "next": [
+            {
+              "to": "outcome:shown",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "ChatArea",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "AI Agent · Customer support"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "card",
+                "text": "<the answer>"
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "<suggested question 1>",
+                  "<suggested question 2>"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type your message here..."
+              },
+              {
+                "t": "button",
+                "text": "Send Message",
+                "state": "disabled"
+              }
+            ],
+            "note": "The spinner is replaced by the answer; question chips appear under it."
+          }
+        },
+        {
+          "id": "s8",
+          "at": "message-view",
+          "action": "Fetch throws on !response.ok; placeholder is never replaced, so the spinner runs until the 30 second timer",
+          "source": {
+            "file": "customer-support-agent/components/ChatArea.tsx",
+            "lines": [
+              138,
+              144
+            ],
+            "anchor": "}, 30000);"
+          },
+          "next": [
+            {
+              "to": "outcome:late-error",
+              "when": "after 30 seconds"
+            }
+          ],
+          "screen": {
+            "name": "ChatArea",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "AI Agent · Customer support"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "spinner",
+                "text": "Thinking..."
+              },
+              {
+                "t": "input",
+                "text": "Type your message here..."
+              },
+              {
+                "t": "button",
+                "text": "Send Message",
+                "state": "disabled"
+              }
+            ],
+            "note": "The box unlocks, but the \"Thinking...\" bubble keeps spinning."
+          }
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "shown",
+          "label": "Answer and suggested questions shown",
+          "kind": "success",
+          "screen": {
+            "name": "ChatArea",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "AI Agent · Customer support"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "card",
+                "text": "<the answer>"
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "<suggested question 1>",
+                  "<suggested question 2>"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type your message here..."
+              },
+              {
+                "t": "button",
+                "text": "Send Message",
+                "state": "disabled"
+              }
+            ],
+            "note": "Answer and suggested questions are on screen; you can type again."
+          }
+        },
+        {
+          "id": "human-button",
+          "label": "'Talk to a human' button shown",
+          "kind": "blocked",
+          "screen": {
+            "name": "ChatArea",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "AI Agent · Customer support"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "card",
+                "text": "<the answer>"
+              },
+              {
+                "t": "button",
+                "text": "Talk to a human",
+                "state": "active"
+              },
+              {
+                "t": "input",
+                "text": "Type your message here..."
+              },
+              {
+                "t": "button",
+                "text": "Send Message",
+                "state": "disabled"
+              }
+            ],
+            "note": "The button is there; clicking it changes nothing on screen."
+          }
+        },
+        {
+          "id": "late-error",
+          "label": "'Something went wrong' after 30s",
+          "kind": "error",
+          "screen": {
+            "name": "ChatArea",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "AI Agent · Customer support"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "banner",
+                "text": "Something went wrong. Please try again.",
+                "state": "error"
+              },
+              {
+                "t": "input",
+                "text": "Type your message here..."
+              },
+              {
+                "t": "button",
+                "text": "Send Message",
+                "state": "disabled"
+              }
+            ],
+            "note": "After 30 seconds the spinner turns into a plain error line."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Normal answer",
+          "input": "\"What payment methods do you accept?\" → 200 with should_redirect false",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s7"
+          ],
+          "outcome": "shown",
+          "explain": "Sidebars update, the bubble shows the markdown answer and chips like 'How do I update my card?'.",
+          "brief": "A user asks an everyday billing question and the server answers normally.",
+          "facts": [
+            "server replies 200",
+            "no hand-off asked"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Claude hands off",
+          "input": "\"This is the third time it broke, get me a human!\" → 200 with should_redirect true",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "outcome": "human-button",
+          "explain": "The bubble gets a 'Talk to a human' button. Clicking it only fires a window event and logs to the console.",
+          "brief": "An upset user demands a person, and the server answers normally.",
+          "facts": [
+            "server replies 200",
+            "hand-off asked: yes"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Server error",
+          "input": "Anthropic key missing → route returns 500",
+          "path": [
+            "s1",
+            "s2",
+            "s8"
+          ],
+          "outcome": "late-error",
+          "explain": "The 500 body (with a friendly sorry text) is ignored. The empty placeholder keeps spinning until the 30s timer shows 'Something went wrong'.",
+          "brief": "A user sends a question while the server has no API key.",
+          "facts": [
+            "API key missing",
+            "server replies 500"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kb-search",
+      "name": "Knowledge base search",
+      "trigger": "chat-route calls retrieveContext(latestMessage, knowledgeBaseId)",
+      "summary": "Inside the search helper: check the id, ask Bedrock, keep chunks with text, and split them into prompt context and sidebar sources.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "retrieval-limits",
+          "action": "Is a knowledge base id set?",
+          "source": {
+            "file": "customer-support-agent/app/lib/utils.ts",
+            "lines": [
+              41,
+              48
+            ],
+            "anchor": "console.error(\"knowledgeBaseId is not provided\");"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "yes"
+            },
+            {
+              "to": "outcome:no-kb",
+              "when": "no"
+            }
+          ],
+          "screen": {
+            "name": "retrieveContext",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: knowledge base search"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "🔍 Initiating RAG retrieval for query: <the question>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "Nothing changes in the browser during the search.",
+                "state": "muted"
+              }
+            ],
+            "note": "No screen of its own: the search runs inside the server."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "bedrock-kb",
+          "action": "Sends RetrieveCommand asking for 3 results",
+          "carries": "{ retrievalQuery: { text: 'refund policy' }, numberOfResults: 3 }",
+          "source": {
+            "file": "customer-support-agent/app/lib/utils.ts",
+            "lines": [
+              50,
+              59
+            ],
+            "anchor": "const command = new RetrieveCommand(input);"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "Bedrock answers"
+            },
+            {
+              "to": "outcome:rag-down",
+              "when": "Bedrock throws (bad keys, wrong region, bad id)"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "retrieve-context",
+          "action": "Keeps only results that have text",
+          "source": {
+            "file": "customer-support-agent/app/lib/utils.ts",
+            "lines": [
+              61,
+              64
+            ],
+            "anchor": ".filter((res: any) => res.content && res.content.text)"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "at least one chunk has text"
+            },
+            {
+              "to": "outcome:empty-ok",
+              "when": "no chunks"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "retrieval-limits",
+          "action": "Joins all chunks into the context, but keeps only the first one as a sidebar source",
+          "carries": "{ context: 3 chunks joined, ragSources: [1 source], isRagWorking: true }",
+          "source": {
+            "file": "customer-support-agent/app/lib/utils.ts",
+            "lines": [
+              81,
+              94
+            ],
+            "anchor": "isRagWorking: true,"
+          },
+          "next": [
+            {
+              "to": "outcome:ready",
+              "when": "always"
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "ready",
+          "label": "Context ready (up to 3 chunks, 1 source)",
+          "kind": "success",
+          "screen": {
+            "name": "retrieveContext",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: knowledge base search"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "🔍 Parsed RAG Sources: [<1 source>]",
+                  "🔍 RAG Retrieved: YES",
+                  "✅ RAG retrieval completed successfully. Context: <first 100 characters>..."
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "Context ready for the prompt",
+                "state": "ok"
+              }
+            ],
+            "note": "Found text is logged and handed on."
+          }
+        },
+        {
+          "id": "empty-ok",
+          "label": "Empty context but marked as working",
+          "kind": "blocked",
+          "screen": {
+            "name": "retrieveContext",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: knowledge base search"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "🔍 Parsed RAG Sources: []",
+                  "🔍 RAG Retrieved: YES",
+                  "✅ RAG retrieval completed successfully. Context: ..."
+                ]
+              },
+              {
+                "t": "banner",
+                "text": "Empty context, still marked as working",
+                "state": "active"
+              }
+            ],
+            "note": "The log says success even though nothing was found."
+          }
+        },
+        {
+          "id": "no-kb",
+          "label": "Skipped: no knowledge base id",
+          "kind": "blocked",
+          "screen": {
+            "name": "retrieveContext",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: knowledge base search"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "knowledgeBaseId is not provided",
+                  "🚨 RAG Retrieval failed but did not throw!",
+                  "🔍 RAG Retrieved: NO"
+                ],
+                "state": "error"
+              },
+              {
+                "t": "banner",
+                "text": "Search skipped; the chat goes on without context",
+                "state": "muted"
+              }
+            ],
+            "note": "One error line, then the chat carries on with no context."
+          }
+        },
+        {
+          "id": "rag-down",
+          "label": "Search failed, empty context",
+          "kind": "error",
+          "screen": {
+            "name": "retrieveContext",
+            "kind": "terminal",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Server log: knowledge base search"
+              },
+              {
+                "t": "console",
+                "items": [
+                  "RAG Error: <the error>",
+                  "🚨 RAG Retrieval failed but did not throw!",
+                  "🔍 RAG Retrieved: NO"
+                ],
+                "state": "error"
+              },
+              {
+                "t": "banner",
+                "text": "Search failed; the chat goes on without context",
+                "state": "error"
+              }
+            ],
+            "note": "The error is logged and swallowed; the user sees nothing about it."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Good match",
+          "input": "query 'refund policy', id 'KB123', Bedrock returns 3 chunks",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4"
+          ],
+          "outcome": "ready",
+          "explain": "All 3 chunk texts go into the prompt; the right sidebar only ever sees the first.",
+          "brief": "A search for the refund policy runs against a working knowledge base.",
+          "facts": [
+            "knowledge base: KB123",
+            "search service answers",
+            "3 pieces of text found"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "No id",
+          "input": "knowledgeBaseId ''",
+          "path": [
+            "s1"
+          ],
+          "outcome": "no-kb",
+          "explain": "Returns isRagWorking false, so the prompt says 'No information found for this query.'",
+          "brief": "A question arrives with no knowledge base picked.",
+          "facts": [
+            "knowledge base id: empty",
+            "question still sent"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Wrong AWS keys",
+          "input": "BAWS_SECRET_ACCESS_KEY is wrong",
+          "path": [
+            "s1",
+            "s2"
+          ],
+          "outcome": "rag-down",
+          "explain": "The send throws, the catch returns an empty result. The chat still goes on without context.",
+          "brief": "A search runs with a wrong cloud secret key.",
+          "facts": [
+            "knowledge base: KB123",
+            "secret key is wrong"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Nothing found",
+          "input": "query 'zzzz', Bedrock returns 0 results",
+          "path": [
+            "s1",
+            "s2",
+            "s3"
+          ],
+          "outcome": "empty-ok",
+          "explain": "isRagWorking stays true, so the prompt pastes an empty string instead of 'No information found'.",
+          "brief": "A search for nonsense text runs against a working knowledge base.",
+          "facts": [
+            "knowledge base: KB123",
+            "search service answers",
+            "0 results found"
+          ]
+        }
+      ]
+    }
+  ],
+  "quests": [
+    {
+      "id": "q1",
+      "type": "quiz",
+      "title": "The opening brace",
+      "prompt": "Right before calling Claude, what does the route add to the end of the message list?",
+      "options": [
+        "A user message saying 'Reply in JSON'",
+        "An assistant message containing just '{'",
+        "The knowledge base text",
+        "Nothing, it sends the messages as they are"
+      ],
+      "answer": 1,
+      "explain": "It pushes { role: 'assistant', content: '{' } so Claude continues straight into JSON, then glues '{' back on before parsing.",
+      "xp": 20
+    },
+    {
+      "id": "q2",
+      "type": "predict",
+      "title": "An angry mood",
+      "target": "answer-question/c3",
+      "prompt": "Claude replies with user_mood: \"angry\". What happens?",
+      "options": [
+        "Answer sent back (200)",
+        "Answer with hand-off to human (200)",
+        "Sorry message with status 500"
+      ],
+      "answer": 2,
+      "explain": "The Zod schema only allows positive, neutral, negative, curious, frustrated, confused. The parse throws and the catch returns 500.",
+      "xp": 25
+    },
+    {
+      "id": "q3",
+      "type": "predict",
+      "title": "When the server fails",
+      "target": "show-reply/c3",
+      "prompt": "The route returns status 500 with a friendly sorry message. What does the user see?",
+      "options": [
+        "Answer and suggested questions shown",
+        "'Talk to a human' button shown",
+        "'Something went wrong' after 30s"
+      ],
+      "answer": 2,
+      "explain": "The browser throws on !response.ok and never reads the body. The empty placeholder spins until the 30s timer fires.",
+      "xp": 25
+    },
+    {
+      "id": "q4",
+      "type": "quiz",
+      "title": "Three in, one out",
+      "prompt": "With a good match, how many knowledge chunks reach Claude's prompt, and how many show in the sources sidebar?",
+      "options": [
+        "1 and 1",
+        "3 and 3",
+        "3 and 1",
+        "Up to 10 and 3"
+      ],
+      "answer": 2,
+      "explain": "Bedrock is asked for 3 results and all go into the context, but ragSources is cut with .slice(0, 1).",
+      "xp": 20
+    },
+    {
+      "id": "q5",
+      "type": "quiz",
+      "title": "Who calls for a human?",
+      "prompt": "Who decides that the user should be handed to a human agent?",
+      "options": [
+        "A keyword check in the route for words like 'human'",
+        "Claude, by setting redirect_to_agent.should_redirect in its JSON",
+        "The sources sidebar, when the match score is below 40%",
+        "The mood: any 'frustrated' user is redirected"
+      ],
+      "answer": 1,
+      "explain": "There is no code rule. The system prompt tells Claude when to redirect, and the code only reacts to its should_redirect field.",
+      "xp": 20
+    },
+    {
+      "id": "q6",
+      "type": "predict",
+      "title": "Searching for nothing",
+      "target": "kb-search/c4",
+      "prompt": "Bedrock finds 0 results for the query. How does the search end?",
+      "options": [
+        "Context ready (up to 3 chunks, 1 source)",
+        "Empty context but marked as working",
+        "Skipped: no knowledge base id",
+        "Search failed, empty context"
+      ],
+      "answer": 1,
+      "explain": "No error is thrown, so isRagWorking stays true and the prompt gets an empty string instead of 'No information found'.",
+      "xp": 25
+    },
+    {
+      "id": "q7",
+      "type": "quiz",
+      "title": "Category tags",
+      "prompt": "What part of the categories JSON is actually sent to Claude?",
+      "options": [
+        "Only the category ids, joined by commas",
+        "Ids and all keywords",
+        "Ids, names and keywords as JSON",
+        "Nothing; categories are matched in code"
+      ],
+      "answer": 0,
+      "explain": "categoryListString maps each category to c.id and joins them. Keywords are never used.",
+      "xp": 20
+    },
+    {
+      "id": "q8",
+      "type": "trace",
+      "title": "Follow a question",
+      "target": "answer-question",
+      "prompt": "Watch one question travel from the route through search, Claude and the shape check.",
+      "xp": 10
+    }
+  ],
+  "cracks": [
+    {
+      "id": "k1",
+      "at": "redirect-rule",
+      "severity": "high",
+      "title": "'Talk to a human' leads nowhere",
+      "hint": "After the button fires its event, who is listening?",
+      "finding": "The button dispatches 'humanAgentRequested' and the chat dispatches 'agentRedirectRequested', but no code in the app listens to either. A user who needs a person gets a button that only logs to the console.",
+      "suggestion": "Add a listener that opens a real hand-off (ticket, live chat, email form) and tell the user what happens next.",
+      "decoys": [
+        "The button text is too small to read",
+        "The redirect reason is not shown in the left sidebar",
+        "should_redirect is checked twice, once on the server and once in the browser"
+      ],
+      "source": {
+        "file": "customer-support-agent/components/ChatArea.tsx",
+        "lines": [
+          63,
+          78
+        ],
+        "anchor": "const event = new CustomEvent(\"humanAgentRequested\", {"
+      }
+    },
+    {
+      "id": "k2",
+      "at": "message-view",
+      "severity": "medium",
+      "title": "Errors hide behind a 30 second spinner",
+      "hint": "The server sends a polite sorry message on failure. Does the browser read it?",
+      "finding": "On a 500 the browser throws before reading the body, so the placeholder is never replaced. The user stares at 'Thinking...' for 30 seconds before 'Something went wrong' appears.",
+      "suggestion": "On !response.ok, read the JSON body and replace the placeholder right away with its response text.",
+      "decoys": [
+        "The 30 second timer is cleared too early",
+        "JSON.parse of the placeholder fails",
+        "The spinner uses the wrong color"
+      ],
+      "source": {
+        "file": "customer-support-agent/components/ChatArea.tsx",
+        "lines": [
+          463,
+          465
+        ],
+        "anchor": "throw new Error(`API request failed with status ${response.status}`);"
+      }
+    },
+    {
+      "id": "k3",
+      "at": "chat-route",
+      "severity": "high",
+      "title": "Browser picks the model and knowledge base",
+      "hint": "Where do 'model' and 'knowledgeBaseId' come from, and who checks them?",
+      "finding": "The route takes model and knowledgeBaseId straight from the request body with no allowlist or input check. Anyone can call /api/chat with the most costly model or any knowledge base the AWS keys can reach. An empty messages array even crashes before the try block.",
+      "suggestion": "Validate the body with Zod and only accept model and KB ids from a server-side allowlist.",
+      "decoys": [
+        "The API key is read on every request",
+        "temperature 0.3 is too low",
+        "max_tokens should be 4000"
+      ],
+      "source": {
+        "file": "customer-support-agent/app/api/chat/route.ts",
+        "lines": [
+          69,
+          70
+        ],
+        "anchor": "const { messages, model, knowledgeBaseId } = await req.json();"
+      }
+    },
+    {
+      "id": "k4",
+      "at": "retrieval-limits",
+      "severity": "low",
+      "title": "Empty search counts as success",
+      "hint": "What does isRagWorking say when Bedrock found nothing?",
+      "finding": "When Bedrock returns zero chunks, retrieveContext still returns isRagWorking: true with an empty context. The prompt then pastes an empty block instead of 'No information found', which makes it less clear to Claude that it has nothing to go on.",
+      "suggestion": "Set isRagWorking to false (or say 'No information found') when no chunk has text.",
+      "decoys": [
+        "n = 3 should be 10",
+        "The file name loses its '.txt' ending",
+        "The region us-east-1 is hard-coded"
+      ],
+      "source": {
+        "file": "customer-support-agent/app/lib/utils.ts",
+        "lines": [
+          81,
+          90
+        ],
+        "anchor": "isRagWorking: true,"
+      }
+    }
+  ]
+}

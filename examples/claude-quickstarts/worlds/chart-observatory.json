@@ -1,0 +1,2127 @@
+{
+  "id": "chart-observatory",
+  "name": "financial-data-analyst",
+  "theme": "crystal",
+  "tagline": "Drop in a spreadsheet, ask a question, watch Claude draw the chart",
+  "summary": "A Next.js app where you chat with Claude about financial data. You can attach a CSV, text file, PDF or image; the browser turns it into text or base64 and puts it inside your chat message. One server route sends the chat to Claude with a single tool, generate_graph_data. If Claude uses the tool, the server cleans up the chart data and the right-hand panel draws it as a bar, line, area or pie chart.",
+  "paths": [
+    "financial-data-analyst/app/page.tsx",
+    "financial-data-analyst/app/finance/page.tsx",
+    "financial-data-analyst/app/api/finance/route.ts",
+    "financial-data-analyst/components/ChartRenderer.tsx",
+    "financial-data-analyst/components/FilePreview.tsx",
+    "financial-data-analyst/utils/fileHandling.ts",
+    "financial-data-analyst/types/chart.ts"
+  ],
+  "districts": [
+    {
+      "id": "upload",
+      "name": "Upload Bay"
+    },
+    {
+      "id": "chat",
+      "name": "Chat Deck"
+    },
+    {
+      "id": "server",
+      "name": "Server Route"
+    },
+    {
+      "id": "claude",
+      "name": "Claude's Tower"
+    },
+    {
+      "id": "display",
+      "name": "Observatory Dome"
+    }
+  ],
+  "entities": [
+    {
+      "id": "upload-gate",
+      "kind": "guardrail",
+      "name": "File type sorter",
+      "district": "upload",
+      "summary": "Runs when you pick a file. It sorts the file into image, PDF or 'try it as text', and shows an error toast if reading fails.",
+      "details": "- Images (type starts with image/) are kept as base64\n- PDFs (application/pdf) have their text pulled out with pdf.js\n- Everything else is read as plain text; an empty result is rejected\n- Text and PDF results are packed with btoa(encodeURIComponent(text)) and marked isText\n- There is no size limit and no allowlist of extensions",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            282,
+            369
+          ],
+          "anchor": "const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {"
+        },
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            299,
+            336
+          ],
+          "anchor": "const isPDF = file.type === \"application/pdf\";"
+        }
+      ],
+      "guard": {
+        "rule": "Only files that can be read as an image, a PDF's text, or non-empty text get attached",
+        "checks": "file.type starts with image/, equals application/pdf, or readAsText returns a non-empty string",
+        "onFail": "A red toast ('PDF parsing failed' or 'Invalid file type') and nothing is attached"
+      }
+    },
+    {
+      "id": "file-readers",
+      "kind": "module",
+      "name": "File readers",
+      "district": "upload",
+      "summary": "Three small helpers that read a file in the browser: as text, as base64, or as PDF text.",
+      "details": "- readFileAsText rejects an empty file\n- readFileAsBase64 strips the 'data:...;base64,' prefix\n- readFileAsPDFText adds a pdf.js script tag from a CDN, walks every page and joins the text\n- A new line is added when the y-position jumps more than 5 units",
+      "source": [
+        {
+          "file": "financial-data-analyst/utils/fileHandling.ts",
+          "lines": [
+            2,
+            36
+          ],
+          "anchor": "export const readFileAsText = (file: File): Promise<string> => {"
+        },
+        {
+          "file": "financial-data-analyst/utils/fileHandling.ts",
+          "lines": [
+            38,
+            91
+          ],
+          "anchor": "export const readFileAsPDFText = async (file: File): Promise<string> => {"
+        }
+      ]
+    },
+    {
+      "id": "file-preview",
+      "kind": "ui",
+      "name": "File preview chip",
+      "district": "upload",
+      "summary": "Shows the attached file: a small picture for images, or a page icon with the file extension for everything else.",
+      "details": "- Large size (with an X to remove) sits above the input box\n- Small size sits under your sent message\n- Images are shown straight from a data: URL built from the base64\n- Long names are cut to 7 letters plus the extension",
+      "source": [
+        {
+          "file": "financial-data-analyst/components/FilePreview.tsx",
+          "lines": [
+            17,
+            35
+          ],
+          "anchor": "const imageUrl = isImage"
+        }
+      ]
+    },
+    {
+      "id": "finance-page",
+      "kind": "entry",
+      "name": "Finance page",
+      "district": "chat",
+      "summary": "The only page. The home route simply shows the finance chat screen: chat on the left, charts on the right.",
+      "details": "- app/page.tsx just returns <FinancePage />\n- Left card: chat sidebar with model picker and input\n- Right card: 'Analysis & Visualizations' with one chart per screen and pagination dots",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/page.tsx",
+          "lines": [
+            7,
+            9
+          ],
+          "anchor": "return <FinancePage />;"
+        },
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            516,
+            528
+          ],
+          "anchor": "{/* Chat Sidebar */}"
+        }
+      ]
+    },
+    {
+      "id": "chat-panel",
+      "kind": "ui",
+      "name": "Chat panel",
+      "district": "chat",
+      "summary": "Where you type and send. On send it adds your message and a 'thinking' bubble, then posts the whole chat to /api/finance.",
+      "details": "- Does nothing if the box is empty and no file is attached\n- Text files are decoded and pasted into the message as 'File contents of <name>'\n- Images become an image block plus a text block\n- Every earlier message (and its file) is re-sent on every turn\n- On success the thinking bubble is replaced with the reply and chart; on error with an apology",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            371,
+            437
+          ],
+          "anchor": "const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {"
+        },
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            454,
+            478
+          ],
+          "anchor": "data.chartData || (data.toolUse?.input as ChartData) || null,"
+        }
+      ]
+    },
+    {
+      "id": "chat-state",
+      "kind": "store",
+      "name": "Chat memory",
+      "district": "chat",
+      "summary": "React state that holds every message (with its file and chart) plus the file waiting to be sent.",
+      "details": "- messages: the full history; lives only in the browser tab\n- currentUpload: the attached file until the next send\n- A message may carry chartData, which puts it in the chart panel\n- Refreshing the page wipes everything",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            44,
+            57
+          ],
+          "anchor": "interface Message {"
+        },
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            197,
+            211
+          ],
+          "anchor": "const [messages, setMessages] = useState<Message[]>([]);"
+        }
+      ]
+    },
+    {
+      "id": "model-list",
+      "kind": "config",
+      "name": "Model list",
+      "district": "chat",
+      "summary": "The three Claude models you can pick from the dropdown. The chosen id is sent with each request.",
+      "details": "- Claude 3 Haiku, Claude 4.5 Haiku, Claude 3.5 Sonnet\n- Default is claude-3-5-sonnet-20240620\n- The server does not check the id against this list",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            72,
+            76
+          ],
+          "anchor": "const models: Model[] = ["
+        },
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            201,
+            203
+          ],
+          "anchor": "const [selectedModel, setSelectedModel] = useState("
+        }
+      ]
+    },
+    {
+      "id": "finance-api",
+      "kind": "entry",
+      "name": "POST /api/finance",
+      "district": "server",
+      "summary": "The one server route. It reads the chat and model from the request and copies the messages for Claude.",
+      "details": "- Runs on the edge runtime\n- Reads { messages, fileData, model } from the JSON body\n- Has a fileData branch, but the current page never sends fileData (files are already inside messages)\n- Sends back { content, hasToolUse, toolUse, chartData }",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            103,
+            134
+          ],
+          "anchor": "export async function POST(req: NextRequest) {"
+        },
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            136,
+            193
+          ],
+          "anchor": "if (fileData) {"
+        }
+      ]
+    },
+    {
+      "id": "request-check",
+      "kind": "guardrail",
+      "name": "Request check",
+      "district": "server",
+      "summary": "Stops the request early if there is no messages array or no model.",
+      "details": "- messages must exist and be an array\n- model must be set (any string is accepted)\n- Fails with HTTP 400 and a JSON error",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            115,
+            128
+          ],
+          "anchor": "if (!messages || !Array.isArray(messages)) {"
+        }
+      ],
+      "guard": {
+        "rule": "A request must carry a chat history and a model",
+        "checks": "Array.isArray(messages) and model is truthy",
+        "onFail": "HTTP 400 'Messages array is required' or 'Model selection is required'"
+      }
+    },
+    {
+      "id": "chart-check",
+      "kind": "guardrail",
+      "name": "Chart data check",
+      "district": "server",
+      "summary": "Looks at what Claude put into the tool call, checks the basics, reshapes pie data and paints each series a color.",
+      "details": "- Throws if chartType is missing or data is not an array\n- Pie: rows are rebuilt as { segment, value } using xAxisKey and the first chartConfig key\n- Each chartConfig key gets a color hsl(var(--chart-1)), --chart-2, ... in order\n- The chartType value itself is not checked against the six allowed names",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            353,
+            402
+          ],
+          "anchor": "const processToolResponse = (toolUseContent: any) => {"
+        }
+      ],
+      "guard": {
+        "rule": "Tool output must look like a chart before it is sent to the browser",
+        "checks": "chartData.chartType is set and chartData.data is an array",
+        "onFail": "Throws 'Invalid chart data structure', which becomes an HTTP 500"
+      }
+    },
+    {
+      "id": "error-handler",
+      "kind": "guardrail",
+      "name": "Error catcher",
+      "district": "server",
+      "summary": "The big catch at the end of the route. It turns any thrown error into a JSON error response.",
+      "details": "- Anthropic API errors return their own status code\n- The AuthenticationError branch is never reached, because APIError is checked first and covers it\n- Anything else becomes HTTP 500 with the error message",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            422,
+            464
+          ],
+          "anchor": "if (error instanceof Anthropic.APIError) {"
+        }
+      ],
+      "guard": {
+        "rule": "No error escapes the route without a JSON answer",
+        "checks": "error instanceof Anthropic.APIError, then AuthenticationError, else generic",
+        "onFail": "Returns { error, details } with the API status, 401, or 500"
+      }
+    },
+    {
+      "id": "analyst",
+      "kind": "agent",
+      "name": "The Analyst",
+      "district": "claude",
+      "summary": "Claude, called once per message with the chart tool and a long system prompt. It either answers in text, calls the chart tool, or both.",
+      "details": "- One call to messages.create, no loop and no tool_result sent back\n- max_tokens 4096, temperature 0.7\n- tool_choice auto: Claude decides if a chart is needed\n- Told never to mention that it is using the tool",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            215,
+            221
+          ],
+          "anchor": "const response = await anthropic.messages.create({"
+        },
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            350,
+            351
+          ],
+          "anchor": "const toolUseContent = response.content.find((c) => c.type === \"tool_use\");"
+        }
+      ],
+      "agent": {
+        "role": "Reads financial data and answers with insight and, when useful, a chart spec",
+        "model": "picked by the user (default claude-3-5-sonnet-20240620)",
+        "tools": [
+          "graph-tool"
+        ],
+        "prompt": "system-prompt"
+      }
+    },
+    {
+      "id": "graph-tool",
+      "kind": "skill",
+      "name": "generate_graph_data tool",
+      "district": "claude",
+      "summary": "The only tool Claude has. It is not code that runs; its input is the chart spec the app draws.",
+      "details": "- chartType: bar, multiBar, line, pie, area or stackedArea\n- config: title and description required; trend, footer, totalLabel, xAxisKey optional\n- data: array of rows with any keys\n- chartConfig: one entry per series, each with a label",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            37,
+            101
+          ],
+          "anchor": "name: \"generate_graph_data\","
+        }
+      ]
+    },
+    {
+      "id": "system-prompt",
+      "kind": "config",
+      "name": "Analyst system prompt",
+      "district": "claude",
+      "summary": "Tells Claude it is a financial chart expert, when to use each chart type, and shows example data shapes.",
+      "details": "- Lists the six chart types with use cases\n- Gives example data for time series, multi-bar and pie\n- Says: use real data, add trend and footer, never announce the tool",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            222,
+            329
+          ],
+          "anchor": "You are a financial data visualization expert."
+        }
+      ]
+    },
+    {
+      "id": "anthropic-api",
+      "kind": "external",
+      "name": "Anthropic API",
+      "district": "claude",
+      "summary": "Claude's home. The route builds one Anthropic client from the ANTHROPIC_API_KEY environment variable.",
+      "details": "- Key is read once at module load\n- The browser never sees the key; it only talks to /api/finance",
+      "source": [
+        {
+          "file": "financial-data-analyst/app/api/finance/route.ts",
+          "lines": [
+            6,
+            9
+          ],
+          "anchor": "const anthropic = new Anthropic({"
+        }
+      ]
+    },
+    {
+      "id": "chart-renderer",
+      "kind": "ui",
+      "name": "Chart renderer",
+      "district": "display",
+      "summary": "Picks a chart component by chartType and draws it with Recharts inside a card with title, trend and footer.",
+      "details": "- bar draws only the first chartConfig key\n- multiBar, line, area, stackedArea draw one series per chartConfig key\n- pie adds up 'value' for the number in the middle\n- Unknown chartType returns null (an empty slot)\n- Wrapped in SafeChartRenderer, whose try/catch cannot catch errors thrown inside the chart",
+      "source": [
+        {
+          "file": "financial-data-analyst/components/ChartRenderer.tsx",
+          "lines": [
+            391,
+            408
+          ],
+          "anchor": "export function ChartRenderer({ data }: { data: ChartData }) {"
+        },
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            95,
+            112
+          ],
+          "anchor": "const SafeChartRenderer: React.FC<{ data: ChartData }> = ({ data }) => {"
+        },
+        {
+          "file": "financial-data-analyst/app/finance/page.tsx",
+          "lines": [
+            694,
+            712
+          ],
+          "anchor": "<SafeChartRenderer data={message.chartData} />"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "upload-file",
+      "name": "User attaches a file",
+      "trigger": "User clicks the paperclip and picks a file",
+      "summary": "The browser reads the file locally and turns it into either base64 (images) or packed text (PDF and everything else). Nothing is sent to the server yet.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "chat-panel",
+          "action": "Paperclip opens the hidden file input; the first chosen file is taken",
+          "carries": "File { name: 'q3.csv', type: 'text/csv' }",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              282,
+              286
+            ],
+            "anchor": "const file = e.target.files?.[0];"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Financial Assistant"
+              },
+              {
+                "t": "text",
+                "text": "Upload CSVs, PDFs, or images and I'll help you understand the data.",
+                "state": "muted"
+              },
+              {
+                "t": "button",
+                "text": "Paperclip (attach file)",
+                "state": "disabled"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              }
+            ],
+            "note": "The file picker closes and the paperclip greys out while the file is read."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "upload-gate",
+          "action": "Sorts the file by its MIME type",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              300,
+              305
+            ],
+            "anchor": "const isImage = file.type.startsWith(\"image/\");"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "type starts with image/"
+            },
+            {
+              "to": "s4",
+              "when": "type is application/pdf"
+            },
+            {
+              "to": "s5",
+              "when": "anything else"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "file-readers",
+          "action": "Reads the image as a data URL and keeps only the base64 part",
+          "carries": "'iVBORw0KGgo...'",
+          "source": {
+            "file": "financial-data-analyst/utils/fileHandling.ts",
+            "lines": [
+              22,
+              36
+            ],
+            "anchor": "const base64 = (reader.result as string).split(\",\")[1];"
+          },
+          "next": [
+            {
+              "to": "s7",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "file-readers",
+          "action": "Loads pdf.js from a CDN and pulls the text out page by page",
+          "source": {
+            "file": "financial-data-analyst/utils/fileHandling.ts",
+            "lines": [
+              38,
+              91
+            ],
+            "anchor": "const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;"
+          },
+          "next": [
+            {
+              "to": "s6",
+              "when": "text extracted"
+            },
+            {
+              "to": "outcome:pdf-failed",
+              "when": "pdf.js fails to load or open the PDF"
+            }
+          ],
+          "screen": {
+            "name": "Toast",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "banner",
+                "text": "Processing PDF: Extracting text content...",
+                "state": "loading"
+              },
+              {
+                "t": "button",
+                "text": "Paperclip (attach file)",
+                "state": "disabled"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              }
+            ],
+            "note": "A \"Processing PDF\" toast stays up while the text is pulled out."
+          }
+        },
+        {
+          "id": "s5",
+          "at": "file-readers",
+          "action": "Reads the file as plain text",
+          "source": {
+            "file": "financial-data-analyst/utils/fileHandling.ts",
+            "lines": [
+              2,
+              20
+            ],
+            "anchor": "reject(new Error(\"Empty or invalid text file\"));"
+          },
+          "next": [
+            {
+              "to": "s6",
+              "when": "non-empty text"
+            },
+            {
+              "to": "outcome:rejected",
+              "when": "file is empty or unreadable"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "upload-gate",
+          "action": "Packs the text with btoa(encodeURIComponent(text)) and marks it isText, mediaType text/plain",
+          "carries": "{ base64: 'UXVhcnRlciUyQ1Jl...', isText: true }",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              322,
+              326
+            ],
+            "anchor": "base64Data = btoa(encodeURIComponent(textContent));"
+          },
+          "next": [
+            {
+              "to": "s7",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s7",
+          "at": "chat-state",
+          "action": "Saves it as currentUpload, waiting for the next send",
+          "carries": "{ base64, fileName: 'q3.csv', mediaType: 'text/plain', isText: true }",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              338,
+              343
+            ],
+            "anchor": "setCurrentUpload({"
+          },
+          "next": [
+            {
+              "to": "s8",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s8",
+          "at": "file-preview",
+          "action": "Shows a thumbnail or a CSV/PDF tile with an X to remove it",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              633,
+              638
+            ],
+            "anchor": "onRemove={() => setCurrentUpload(null)}"
+          },
+          "next": [
+            {
+              "to": "outcome:ready",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "FilePreview",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "card",
+                "text": "<picture thumbnail> or a tile reading CSV / PDF",
+                "items": [
+                  "X (remove)"
+                ]
+              },
+              {
+                "t": "button",
+                "text": "Paperclip (attach file)"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "active"
+              }
+            ],
+            "note": "A small tile for the file appears above the message box; Send lights up."
+          }
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "ready",
+          "label": "File attached and ready to send",
+          "kind": "success",
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "banner",
+                "text": "File uploaded: <file name> ready to analyze",
+                "state": "ok"
+              },
+              {
+                "t": "card",
+                "text": "<picture thumbnail> or a tile reading CSV / PDF",
+                "items": [
+                  "X (remove)"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "active"
+              }
+            ],
+            "note": "A \"File uploaded\" toast shows and the tile waits for you to send."
+          }
+        },
+        {
+          "id": "pdf-failed",
+          "label": "'PDF parsing failed' toast",
+          "kind": "error",
+          "screen": {
+            "name": "Toast",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "banner",
+                "text": "PDF parsing failed: Unable to extract text from the PDF",
+                "state": "error"
+              },
+              {
+                "t": "banner",
+                "text": "PDF Processed: Text extracted successfully",
+                "state": "ok"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "disabled"
+              }
+            ],
+            "note": "A red failure toast shows, then the cleanup code still fires the \"PDF Processed\" toast; no file tile appears."
+          }
+        },
+        {
+          "id": "rejected",
+          "label": "'Invalid file type' toast",
+          "kind": "blocked",
+          "screen": {
+            "name": "Toast",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "banner",
+                "text": "Invalid file type: File must be readable as text, PDF, or be an image",
+                "state": "error"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "disabled"
+              }
+            ],
+            "note": "A red toast shows and nothing is attached."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "CSV of quarterly revenue",
+          "input": "q3.csv, 2 KB, type text/csv",
+          "path": [
+            "s1",
+            "s2",
+            "s5",
+            "s6",
+            "s7",
+            "s8"
+          ],
+          "outcome": "ready",
+          "explain": "CSV is not an image or PDF, so it is read as text, packed, and shown as a CSV tile.",
+          "brief": "A user attaches a small spreadsheet export of quarterly revenue.",
+          "facts": [
+            "file: q3.csv",
+            "type: text/csv",
+            "file has text in it"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Screenshot of a chart",
+          "input": "chart.png, type image/png",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s7",
+            "s8"
+          ],
+          "outcome": "ready",
+          "explain": "Images skip the text packing and stay as base64; the preview shows the picture.",
+          "brief": "A user attaches a screenshot of a chart.",
+          "facts": [
+            "file: chart.png",
+            "type: image/png"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Damaged PDF",
+          "input": "report.pdf that pdf.js cannot open",
+          "path": [
+            "s1",
+            "s2",
+            "s4"
+          ],
+          "outcome": "pdf-failed",
+          "explain": "readFileAsPDFText rejects, the catch shows 'PDF parsing failed' and returns before anything is saved.",
+          "brief": "A user attaches a PDF report that is damaged.",
+          "facts": [
+            "file: report.pdf",
+            "type: application/pdf",
+            "PDF cannot be opened"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Empty text file",
+          "input": "notes.txt, 0 bytes",
+          "path": [
+            "s1",
+            "s2",
+            "s5"
+          ],
+          "outcome": "rejected",
+          "explain": "readAsText gives an empty string, which readFileAsText rejects, so the 'Invalid file type' toast appears.",
+          "brief": "A user attaches a text file with nothing in it.",
+          "facts": [
+            "file: notes.txt",
+            "not an image or PDF",
+            "0 bytes"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ask-question",
+      "name": "User asks a question",
+      "trigger": "User presses Enter or the send button",
+      "summary": "The whole chat goes to the server, which asks Claude once. Claude answers with text, a chart spec, or both, and the browser shows the result.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "chat-panel",
+          "action": "Adds your message and a 'thinking' bubble, then builds the API messages with file text pasted in",
+          "carries": "{ messages: [{ role: 'user', content: 'File contents of q3.csv: ... Plot revenue' }], model: 'claude-3-5-sonnet-20240620' }",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              371,
+              437
+            ],
+            "anchor": "if (!input.trim() && !currentUpload) return;"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "there is text or a file"
+            },
+            {
+              "to": "outcome:ignored",
+              "when": "box empty and no file"
+            }
+          ],
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Financial Assistant · Powered by Claude"
+              },
+              {
+                "t": "card",
+                "text": "<your question>",
+                "items": [
+                  "<file name> (file badge, if attached)"
+                ]
+              },
+              {
+                "t": "spinner",
+                "text": "Thinking..."
+              },
+              {
+                "t": "input",
+                "text": "Type your message...",
+                "state": "disabled"
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "disabled"
+              }
+            ],
+            "note": "Your message and a pulsing \"Thinking...\" bubble appear; the box locks."
+          }
+        },
+        {
+          "id": "s2",
+          "at": "finance-api",
+          "action": "POST /api/finance reads messages and model from the body",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              103,
+              105
+            ],
+            "anchor": "const { messages, fileData, model } = await req.json();"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "request-check",
+          "action": "Checks there is a messages array and a model",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              115,
+              128
+            ],
+            "anchor": "if (!model) {"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "both present"
+            },
+            {
+              "to": "s9",
+              "when": "one is missing (HTTP 400)"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "analyst",
+          "action": "Calls Claude with the system prompt, the chart tool and tool_choice auto",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              215,
+              221
+            ],
+            "anchor": "tool_choice: { type: \"auto\" },"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "Claude replies"
+            },
+            {
+              "to": "s8",
+              "when": "the API call throws"
+            }
+          ]
+        },
+        {
+          "id": "s5",
+          "at": "graph-tool",
+          "action": "Looks for a tool_use block in Claude's reply",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              350,
+              351
+            ],
+            "anchor": "const toolUseContent = response.content.find((c) => c.type === \"tool_use\");"
+          },
+          "next": [
+            {
+              "to": "s6",
+              "when": "Claude called generate_graph_data"
+            },
+            {
+              "to": "s7",
+              "when": "text only"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "chart-check",
+          "action": "Checks chartType and data, reshapes pie rows, adds colors",
+          "carries": "{ chartType: 'bar', data: [...], chartConfig: { revenue: { label, color: 'hsl(var(--chart-1))' } } }",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              358,
+              364
+            ],
+            "anchor": "throw new Error(\"Invalid chart data structure\");"
+          },
+          "next": [
+            {
+              "to": "s7",
+              "when": "chart data looks valid"
+            },
+            {
+              "to": "s8",
+              "when": "chartType missing or data not an array"
+            }
+          ]
+        },
+        {
+          "id": "s7",
+          "at": "chat-panel",
+          "action": "Replaces the thinking bubble with Claude's text and attaches chartData",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              454,
+              465
+            ],
+            "anchor": "hasToolUse: data.hasToolUse || !!data.toolUse,"
+          },
+          "next": [
+            {
+              "to": "s10",
+              "when": "reply has chartData"
+            },
+            {
+              "to": "outcome:text-reply",
+              "when": "no chart"
+            }
+          ],
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Financial Assistant · Powered by Claude"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "Generated Chart"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "<the answer text>"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "disabled"
+              }
+            ],
+            "note": "The thinking bubble becomes the answer; a \"Generated Chart\" badge shows when a chart was made."
+          }
+        },
+        {
+          "id": "s8",
+          "at": "error-handler",
+          "action": "Turns the thrown error into a JSON error with status 4xx/5xx",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              422,
+              464
+            ],
+            "anchor": "console.error(\"❌ Finance API Error: \", error);"
+          },
+          "next": [
+            {
+              "to": "s9",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s9",
+          "at": "chat-panel",
+          "action": "response.ok is false, so the thinking bubble becomes an apology",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              468,
+              478
+            ],
+            "anchor": "content: \"I apologize, but I encountered an error. Please try again.\","
+          },
+          "next": [
+            {
+              "to": "outcome:error",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Financial Assistant · Powered by Claude"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "card",
+                "text": "I apologize, but I encountered an error. Please try again.",
+                "state": "error"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "disabled"
+              }
+            ],
+            "note": "The thinking bubble turns into an apology."
+          }
+        },
+        {
+          "id": "s10",
+          "at": "chart-renderer",
+          "action": "Draws the chart in the right-hand panel and scrolls to it",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              694,
+              712
+            ],
+            "anchor": "<SafeChartRenderer data={message.chartData} />"
+          },
+          "next": [
+            {
+              "to": "outcome:chart-shown",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "ChartRenderer",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "card",
+                "text": "<chart title>",
+                "items": [
+                  "<chart description>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "<the chart>"
+              },
+              {
+                "t": "text",
+                "text": "Trending <up or down> by <n>% this period",
+                "state": "muted"
+              },
+              {
+                "t": "text",
+                "text": "<chart footer>",
+                "state": "muted"
+              }
+            ],
+            "note": "The right-hand panel gets a title and scrolls to the new chart."
+          }
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "chart-shown",
+          "label": "Answer plus a chart",
+          "kind": "success",
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "chips",
+                "items": [
+                  "Generated Chart"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "<the answer text>"
+              },
+              {
+                "t": "divider"
+              },
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "card",
+                "text": "<chart title>",
+                "items": [
+                  "<chart description>",
+                  "<the chart>"
+                ]
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              }
+            ],
+            "note": "Answer on the left, the new chart on the right."
+          }
+        },
+        {
+          "id": "text-reply",
+          "label": "Text answer only",
+          "kind": "success",
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Financial Assistant · Powered by Claude"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "card",
+                "text": "<the answer text>"
+              },
+              {
+                "t": "divider"
+              },
+              {
+                "t": "card",
+                "text": "Analysis & Visualizations",
+                "items": [
+                  "Charts and detailed analysis will appear here as you chat"
+                ]
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "Bar Charts",
+                  "Area Charts",
+                  "Linear Charts",
+                  "Pie Charts"
+                ]
+              }
+            ],
+            "note": "Only the chat changes; the right panel keeps its empty message."
+          }
+        },
+        {
+          "id": "error",
+          "label": "Apology message in chat",
+          "kind": "error",
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Financial Assistant · Powered by Claude"
+              },
+              {
+                "t": "card",
+                "text": "<your question>"
+              },
+              {
+                "t": "card",
+                "text": "I apologize, but I encountered an error. Please try again.",
+                "state": "error"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "disabled"
+              }
+            ],
+            "note": "The chat shows the apology; the attached file tile, if any, stays in place."
+          }
+        },
+        {
+          "id": "ignored",
+          "label": "Nothing happens",
+          "kind": "blocked",
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Financial Assistant"
+              },
+              {
+                "t": "text",
+                "text": "Ask questions about your financial data and I'll create insightful charts.",
+                "state": "muted"
+              },
+              {
+                "t": "input",
+                "text": "Type your message..."
+              },
+              {
+                "t": "button",
+                "text": "Send (arrow icon)",
+                "state": "disabled"
+              }
+            ],
+            "note": "Send stays greyed out with no text and no file, so nothing moves."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Chart from a CSV",
+          "input": "q3.csv attached + 'Plot quarterly revenue'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s10"
+          ],
+          "outcome": "chart-shown",
+          "explain": "Claude calls generate_graph_data, the spec passes the check, and the bar chart appears on the right.",
+          "brief": "A user attaches a revenue spreadsheet and asks for a plot.",
+          "facts": [
+            "file: q3.csv",
+            "message and model sent",
+            "assistant replies",
+            "assistant asks for a chart",
+            "chart data looks right"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Plain question",
+          "input": "'What does EBITDA mean?' with no file",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s7"
+          ],
+          "outcome": "text-reply",
+          "explain": "With tool_choice auto, Claude just answers in text; chartData is null so no chart is drawn.",
+          "brief": "A user asks what a finance term means, with no file.",
+          "facts": [
+            "no file",
+            "message and model sent",
+            "assistant replies",
+            "text only, no chart asked"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Bad API key",
+          "input": "ANTHROPIC_API_KEY is wrong, 'Show my portfolio'",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s8",
+            "s9"
+          ],
+          "outcome": "error",
+          "explain": "messages.create throws an API error; the catch returns its status and the browser shows the apology.",
+          "brief": "A user asks to see their portfolio while the server has a wrong API key.",
+          "facts": [
+            "message and model sent",
+            "API key is wrong"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Tool call without data",
+          "input": "Claude calls the tool but leaves out the data array",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s8",
+            "s9"
+          ],
+          "outcome": "error",
+          "explain": "processToolResponse throws 'Invalid chart data structure', which becomes a 500 and an apology.",
+          "brief": "The assistant asks for a chart but leaves out the rows of data.",
+          "facts": [
+            "message and model sent",
+            "assistant replies",
+            "assistant asks for a chart",
+            "data rows missing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "render-chart",
+      "name": "A chart spec becomes a picture",
+      "trigger": "Claude's tool call arrives at the server",
+      "summary": "The server reshapes and colors the chart spec, the browser stores it on the message, and ChartRenderer picks a drawing by chartType.",
+      "start": "s1",
+      "steps": [
+        {
+          "id": "s1",
+          "at": "chart-check",
+          "action": "Checks if the chart is a pie",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              366,
+              367
+            ],
+            "anchor": "if (chartData.chartType === \"pie\") {"
+          },
+          "next": [
+            {
+              "to": "s2",
+              "when": "chartType is pie"
+            },
+            {
+              "to": "s3",
+              "when": "any other type"
+            }
+          ]
+        },
+        {
+          "id": "s2",
+          "at": "chart-check",
+          "action": "Rebuilds each row as { segment, value } using xAxisKey and the first chartConfig key",
+          "carries": "[{ segment: 'Equities', value: 5500000 }, { segment: 'Bonds', value: 3200000 }]",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              369,
+              382
+            ],
+            "anchor": "value: item[valueKey] || item.value,"
+          },
+          "next": [
+            {
+              "to": "s3",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s3",
+          "at": "chart-check",
+          "action": "Gives each chartConfig key a color: --chart-1, --chart-2, ...",
+          "source": {
+            "file": "financial-data-analyst/app/api/finance/route.ts",
+            "lines": [
+              385,
+              396
+            ],
+            "anchor": "color: `hsl(var(--chart-${index + 1}))`,"
+          },
+          "next": [
+            {
+              "to": "s4",
+              "when": "always"
+            }
+          ]
+        },
+        {
+          "id": "s4",
+          "at": "chat-state",
+          "action": "Stores the spec as message.chartData and scrolls the panel to the newest chart",
+          "source": {
+            "file": "financial-data-analyst/app/finance/page.tsx",
+            "lines": [
+              267,
+              280
+            ],
+            "anchor": "const scrollToNewestChart = () => {"
+          },
+          "next": [
+            {
+              "to": "s5",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "AIChat (finance page)",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "chips",
+                "items": [
+                  "Generated Chart"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "<the answer text>"
+              },
+              {
+                "t": "divider"
+              },
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "text",
+                "text": "Panel scrolls to the newest chart; a new dot is added on the right edge.",
+                "state": "muted"
+              }
+            ],
+            "note": "The right panel title appears and the view scrolls to a new slot."
+          }
+        },
+        {
+          "id": "s5",
+          "at": "chart-renderer",
+          "action": "switch on chartType to pick a component",
+          "source": {
+            "file": "financial-data-analyst/components/ChartRenderer.tsx",
+            "lines": [
+              391,
+              408
+            ],
+            "anchor": "switch (data.chartType) {"
+          },
+          "next": [
+            {
+              "to": "s6",
+              "when": "bar"
+            },
+            {
+              "to": "s7",
+              "when": "multiBar, line, area or stackedArea"
+            },
+            {
+              "to": "s8",
+              "when": "pie"
+            },
+            {
+              "to": "outcome:blank",
+              "when": "any other value"
+            }
+          ]
+        },
+        {
+          "id": "s6",
+          "at": "chart-renderer",
+          "action": "Bar chart draws only the first chartConfig key",
+          "source": {
+            "file": "financial-data-analyst/components/ChartRenderer.tsx",
+            "lines": [
+              33,
+              34
+            ],
+            "anchor": "const dataKey = Object.keys(data.chartConfig)[0];"
+          },
+          "next": [
+            {
+              "to": "outcome:shown",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "BarChartComponent",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "card",
+                "text": "<chart title>",
+                "items": [
+                  "<chart description>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "<bars for the first series only>"
+              },
+              {
+                "t": "text",
+                "text": "Trending <up or down> by <n>% this period",
+                "state": "muted"
+              },
+              {
+                "t": "text",
+                "text": "<chart footer>",
+                "state": "muted"
+              }
+            ],
+            "note": "A bar chart card is drawn."
+          }
+        },
+        {
+          "id": "s7",
+          "at": "chart-renderer",
+          "action": "Draws one series per chartConfig key; stackedArea shares one stackId",
+          "source": {
+            "file": "financial-data-analyst/components/ChartRenderer.tsx",
+            "lines": [
+              351,
+              361
+            ],
+            "anchor": "stackId={stacked ? \"a\" : undefined}"
+          },
+          "next": [
+            {
+              "to": "outcome:shown",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "ChartRenderer",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "card",
+                "text": "<chart title>",
+                "items": [
+                  "<chart description>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "<one line, bar group or area per series>"
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "<series 1>",
+                  "<series 2>",
+                  "<series 3>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "Trending <up or down> by <n>% this period",
+                "state": "muted"
+              },
+              {
+                "t": "text",
+                "text": "<chart footer>",
+                "state": "muted"
+              }
+            ],
+            "note": "A chart with one colored series per key is drawn, with a legend."
+          }
+        },
+        {
+          "id": "s8",
+          "at": "chart-renderer",
+          "action": "Pie adds up every value for the big number in the middle",
+          "source": {
+            "file": "financial-data-analyst/components/ChartRenderer.tsx",
+            "lines": [
+              218,
+              221
+            ],
+            "anchor": "return data.data.reduce((acc, curr) => acc + curr.value, 0);"
+          },
+          "next": [
+            {
+              "to": "outcome:shown",
+              "when": "always"
+            }
+          ],
+          "screen": {
+            "name": "PieChartComponent",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "card",
+                "text": "<chart title>",
+                "items": [
+                  "<chart description>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "<donut with one slice per row>"
+              },
+              {
+                "t": "card",
+                "text": "<sum of all values>",
+                "items": [
+                  "<total label>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "Trending <up or down> by <n>% this period",
+                "state": "muted"
+              },
+              {
+                "t": "text",
+                "text": "<chart footer>",
+                "state": "muted"
+              }
+            ],
+            "note": "A donut is drawn with the big total in the middle."
+          }
+        }
+      ],
+      "outcomes": [
+        {
+          "id": "shown",
+          "label": "Chart drawn in the panel",
+          "kind": "success",
+          "screen": {
+            "name": "ChartRenderer",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "card",
+                "text": "<chart title>",
+                "items": [
+                  "<chart description>"
+                ]
+              },
+              {
+                "t": "text",
+                "text": "<the chart>"
+              },
+              {
+                "t": "text",
+                "text": "Trending <up or down> by <n>% this period",
+                "state": "muted"
+              },
+              {
+                "t": "text",
+                "text": "<chart footer>",
+                "state": "muted"
+              }
+            ],
+            "note": "The chart card fills the right-hand panel."
+          }
+        },
+        {
+          "id": "blank",
+          "label": "Empty chart slot",
+          "kind": "error",
+          "screen": {
+            "name": "ChartRenderer",
+            "kind": "browser",
+            "blocks": [
+              {
+                "t": "title",
+                "text": "Analysis & Visualizations"
+              },
+              {
+                "t": "text",
+                "text": "<empty space where the chart should be>",
+                "state": "muted"
+              },
+              {
+                "t": "divider"
+              },
+              {
+                "t": "chips",
+                "items": [
+                  "Generated Chart"
+                ]
+              },
+              {
+                "t": "card",
+                "text": "<the answer text>"
+              }
+            ],
+            "note": "The panel title and the \"Generated Chart\" badge show, but the slot is empty and there is no error message."
+          }
+        }
+      ],
+      "cases": [
+        {
+          "id": "c1",
+          "name": "Quarterly revenue bars",
+          "input": "chartType 'bar', chartConfig { revenue }",
+          "path": [
+            "s1",
+            "s3",
+            "s4",
+            "s5",
+            "s6"
+          ],
+          "outcome": "shown",
+          "explain": "Not a pie, so it is only colored; the bar component draws the revenue key.",
+          "brief": "A chart spec for quarterly revenue arrives as a bar chart.",
+          "facts": [
+            "chart type: bar",
+            "1 series: revenue"
+          ]
+        },
+        {
+          "id": "c2",
+          "name": "Portfolio pie",
+          "input": "chartType 'pie', rows { segment, value }",
+          "path": [
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s8"
+          ],
+          "outcome": "shown",
+          "explain": "Rows are rebuilt as segment/value, then the pie sums value for the center total.",
+          "brief": "A chart spec for a portfolio split arrives as a pie chart.",
+          "facts": [
+            "chart type: pie",
+            "rows: segment + value"
+          ]
+        },
+        {
+          "id": "c3",
+          "name": "Stacked market share",
+          "input": "chartType 'stackedArea', chartConfig { us, eu, asia }",
+          "path": [
+            "s1",
+            "s3",
+            "s4",
+            "s5",
+            "s7"
+          ],
+          "outcome": "shown",
+          "explain": "Three keys get three colors and are stacked on one stackId.",
+          "brief": "A chart spec for market share arrives as a stacked area chart.",
+          "facts": [
+            "chart type: stackedArea",
+            "3 series: us, eu, asia"
+          ]
+        },
+        {
+          "id": "c4",
+          "name": "Unknown chart type",
+          "input": "chartType 'scatter'",
+          "path": [
+            "s1",
+            "s3",
+            "s4",
+            "s5"
+          ],
+          "outcome": "blank",
+          "explain": "The server only checks chartType exists, not its value; the switch hits default and returns null.",
+          "brief": "A chart spec arrives with a chart type the app has no drawing for.",
+          "facts": [
+            "chart type: scatter",
+            "server checks type exists only"
+          ]
+        }
+      ]
+    }
+  ],
+  "quests": [
+    {
+      "id": "q1",
+      "type": "quiz",
+      "title": "The spreadsheet surprise",
+      "prompt": "You attach an Excel file (budget.xlsx). What does the upload code do with it?",
+      "options": [
+        "Rejects it because only CSV is allowed",
+        "Reads its raw bytes as text and attaches that",
+        "Converts it to CSV first",
+        "Sends it to Claude as an image"
+      ],
+      "answer": 1,
+      "explain": "Anything that is not image/* or application/pdf goes to readFileAsText. A .xlsx gives non-empty garbled text, so it passes and is attached.",
+      "xp": 20
+    },
+    {
+      "id": "q2",
+      "type": "predict",
+      "title": "Just a question",
+      "target": "ask-question/c2",
+      "prompt": "No file, you ask 'What does EBITDA mean?'. Where does the packet end?",
+      "options": [
+        "Answer plus a chart",
+        "Text answer only",
+        "Apology message in chat",
+        "Nothing happens"
+      ],
+      "answer": 1,
+      "explain": "tool_choice is auto, so Claude can skip the tool; chartData is null and only text is shown.",
+      "xp": 20
+    },
+    {
+      "id": "q3",
+      "type": "predict",
+      "title": "Broken PDF",
+      "target": "upload-file/c3",
+      "prompt": "You attach a damaged PDF that pdf.js cannot open. What happens?",
+      "options": [
+        "File attached and ready to send",
+        "'PDF parsing failed' toast",
+        "'Invalid file type' toast"
+      ],
+      "answer": 1,
+      "explain": "readFileAsPDFText rejects and the PDF catch shows 'PDF parsing failed', then returns.",
+      "xp": 20
+    },
+    {
+      "id": "q4",
+      "type": "quiz",
+      "title": "Half a bar chart",
+      "prompt": "Claude sends chartType 'bar' with chartConfig { sales, costs }. What do you see?",
+      "options": [
+        "Sales and costs side by side",
+        "Only sales bars",
+        "Only costs bars",
+        "An error card"
+      ],
+      "answer": 1,
+      "explain": "BarChartComponent uses Object.keys(chartConfig)[0] only. For two series Claude should pick multiBar.",
+      "xp": 25
+    },
+    {
+      "id": "q5",
+      "type": "quiz",
+      "title": "The unused door",
+      "prompt": "The route has a whole branch for fileData. When does the current page use it?",
+      "options": [
+        "For every image",
+        "For PDFs only",
+        "Never: files are already pasted into messages",
+        "Only on the first message"
+      ],
+      "answer": 2,
+      "explain": "handleSubmit sends only { messages, model }. Files are inlined into message content, so fileData is always undefined.",
+      "xp": 25
+    },
+    {
+      "id": "q6",
+      "type": "predict",
+      "title": "A shape it can't draw",
+      "target": "render-chart/c4",
+      "prompt": "A tool call arrives with chartType 'scatter'. What shows up?",
+      "options": [
+        "Chart drawn in the panel",
+        "Empty chart slot"
+      ],
+      "answer": 1,
+      "explain": "chart-check only checks that chartType is set. ChartRenderer's switch falls to default and returns null.",
+      "xp": 20
+    },
+    {
+      "id": "q7",
+      "type": "quiz",
+      "title": "Who paints the colors?",
+      "prompt": "Where do chart series colors come from?",
+      "options": [
+        "Claude picks hex codes",
+        "The server assigns --chart-1, --chart-2... by key order",
+        "Recharts picks random colors",
+        "The user picks them"
+      ],
+      "answer": 1,
+      "explain": "processToolResponse rewrites chartConfig, giving each key hsl(var(--chart-N)) in order.",
+      "xp": 20
+    },
+    {
+      "id": "q8",
+      "type": "trace",
+      "title": "Follow a question to a chart",
+      "target": "ask-question",
+      "prompt": "Watch a CSV question travel from the chat box to Claude and back as a chart.",
+      "xp": 15
+    }
+  ],
+  "cracks": [
+    {
+      "id": "k1",
+      "at": "chat-panel",
+      "severity": "medium",
+      "title": "Every file is re-sent on every turn, with no size limit",
+      "hint": "What happens to the CSV you attached three messages ago?",
+      "finding": "handleSubmit maps over all past messages and pastes each file's full text (or base64 image) back in every time. Nothing limits file size, so a big CSV is sent again and again until the request hits Claude's context limit and fails.",
+      "suggestion": "Check file size on pick, and send each file once (or summarize old files) instead of re-inlining all history.",
+      "decoys": [
+        "The CSV is parsed twice on the server",
+        "The model id is not sent with the request"
+      ],
+      "source": {
+        "file": "financial-data-analyst/app/finance/page.tsx",
+        "lines": [
+          397,
+          404
+        ],
+        "anchor": "const apiMessages = [...messages, userMessage].map((msg) => {"
+      }
+    },
+    {
+      "id": "k2",
+      "at": "chart-check",
+      "severity": "medium",
+      "title": "Pie values can vanish",
+      "hint": "Which key does the pie use for value, and what if it is 0?",
+      "finding": "Pie rows take value from the first chartConfig key, else item.value. If that key is not a data column (the prompt's own example uses 'equities' while rows use 'value') and rows use another name like 'amount', value is undefined and the center total becomes NaN. A real 0 also falls through the || check.",
+      "suggestion": "Use config.xAxisKey plus an explicit value key, check it exists in the rows, and use ?? instead of ||.",
+      "decoys": [
+        "Pie colors repeat after two slices",
+        "Pie charts ignore the title"
+      ],
+      "source": {
+        "file": "financial-data-analyst/app/api/finance/route.ts",
+        "lines": [
+          369,
+          379
+        ],
+        "anchor": "value: item[valueKey] || item.value,"
+      }
+    },
+    {
+      "id": "k3",
+      "at": "chart-renderer",
+      "severity": "medium",
+      "title": "The safety net has a hole",
+      "hint": "Can a try/catch around JSX catch an error that happens later, while React draws?",
+      "finding": "SafeChartRenderer wraps <ChartRenderer/> in try/catch, but it only builds the element; child render errors happen later and are not caught. A malformed spec can crash the whole page instead of showing 'Error rendering chart'.",
+      "suggestion": "Use a React error boundary (class component or react-error-boundary) around each chart.",
+      "decoys": [
+        "Charts are drawn before the data arrives",
+        "The chart list uses the index as key"
+      ],
+      "source": {
+        "file": "financial-data-analyst/app/finance/page.tsx",
+        "lines": [
+          95,
+          112
+        ],
+        "anchor": "const SafeChartRenderer: React.FC<{ data: ChartData }> = ({ data }) => {"
+      }
+    },
+    {
+      "id": "k4",
+      "at": "upload-gate",
+      "severity": "low",
+      "title": "Failed PDF still says 'success'",
+      "hint": "Does an early return skip the finally block?",
+      "finding": "When PDF parsing fails the code shows 'PDF parsing failed' and returns, but the finally block still runs and, because a loading toast exists for PDFs, shows 'PDF Processed: Text extracted successfully'.",
+      "suggestion": "Track success in a flag and only show the success toast when the text was extracted.",
+      "decoys": [
+        "The loading toast is never dismissed",
+        "Images also show the PDF toast"
+      ],
+      "source": {
+        "file": "financial-data-analyst/app/finance/page.tsx",
+        "lines": [
+          356,
+          367
+        ],
+        "anchor": "title: \"PDF Processed\","
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "codequest",
+  "owner": {
+    "name": "CodeQuest"
+  },
+  "metadata": {
+    "description": "CodeQuest: explore any codebase as a game."
+  },
+  "plugins": [
+    {
+      "name": "codequest",
+      "source": "./",
+      "description": "Explore any codebase as a game of worlds, missions and quests."
+    }
+  ]
+}

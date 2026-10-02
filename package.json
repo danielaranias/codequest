@@ -1,0 +1,37 @@
+{
+  "name": "codequest",
+  "version": "1.0.0",
+  "description": "Turn any codebase into a game you explore until you understand it.",
+  "type": "module",
+  "bin": {
+    "codequest": "scripts/codequest.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "scripts",
+    "server",
+    "game",
+    "schema",
+    "skills",
+    "commands",
+    ".claude-plugin"
+  ],
+  "scripts": {
+    "test": "node scripts/test.mjs",
+    "test:e2e": "node --test test/game.e2e.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danielaranias/codequest.git"
+  },
+  "keywords": [
+    "codebase",
+    "game",
+    "agent-skills",
+    "claude-code-plugin"
+  ],
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE"
+}

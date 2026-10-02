@@ -1,0 +1,20 @@
+{
+  "name": "codequest",
+  "version": "1.0.0",
+  "description": "Turn any codebase into a game you explore until you understand it: a journey of worlds, missions, guardrails and agents, kept in sync with the code and powered by your own coding agent.",
+  "homepage": "https://github.com/danielaranias/codequest",
+  "repository": "https://github.com/danielaranias/codequest",
+  "keywords": [
+    "codebase",
+    "onboarding",
+    "game",
+    "visualization",
+    "architecture",
+    "debugging"
+  ],
+  "author": {
+    "name": "CodeQuest contributors",
+    "url": "https://github.com/danielaranias/codequest"
+  },
+  "license": "SEE LICENSE IN LICENSE"
+}

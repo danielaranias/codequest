@@ -1,0 +1,15 @@
+name: Bug
+description: Something in CodeQuest does not work
+labels: [bug]
+body:
+  - type: textarea
+    attributes: { label: What happened, description: What you did, what you expected, what you saw. }
+    validations: { required: true }
+  - type: input
+    attributes: { label: Version, description: "Output of `codequest version`" }
+  - type: dropdown
+    attributes: { label: Agent, options: [Claude Code, Codex, Other, None (snapshot only)] }
+  - type: input
+    attributes: { label: OS and Node version }
+  - type: markdown
+    attributes: { value: "Security problem? Do not post it here. See SECURITY.md." }

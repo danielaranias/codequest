@@ -1,0 +1,7 @@
+name: Idea
+description: Something that would make the game better
+labels: [idea]
+body:
+  - type: textarea
+    attributes: { label: The idea, description: What should the player be able to do, and why is it fun or useful? }
+    validations: { required: true }

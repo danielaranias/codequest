@@ -1,0 +1,112 @@
+{
+ "id": "two",
+ "name": "Store",
+ "theme": "ocean",
+ "summary": "Saves the items.",
+ "paths": [
+  "src/store.js"
+ ],
+ "districts": [
+  {
+   "id": "d",
+   "name": "Store"
+  }
+ ],
+ "entities": [
+  {
+   "id": "save",
+   "kind": "store",
+   "name": "save",
+   "district": "d",
+   "summary": "Saves items.",
+   "details": "One by one, or as a batch.",
+   "source": [
+    {
+     "file": "src/store.js",
+     "lines": [
+      1,
+      5
+     ],
+     "anchor": "export function save"
+    }
+   ]
+  }
+ ],
+ "flows": [
+  {
+   "id": "h",
+   "name": "Save the items",
+   "summary": "s",
+   "trigger": "a handled request",
+   "start": "v1",
+   "steps": [
+    {
+     "id": "v1",
+     "at": "save",
+     "action": "Is there anything to save?",
+     "next": [
+      {
+       "to": "v2",
+       "when": "there is at least 1 item"
+      },
+      {
+       "to": "outcome:skip",
+       "when": "there are 0 items"
+      }
+     ]
+    },
+    {
+     "id": "v2",
+     "at": "save",
+     "action": "How many items?",
+     "next": [
+      {
+       "to": "outcome:one",
+       "when": "5 items or fewer"
+      },
+      {
+       "to": "outcome:batch",
+       "when": "more than 5 items"
+      }
+     ]
+    }
+   ],
+   "outcomes": [
+    {
+     "id": "one",
+     "kind": "success",
+     "label": "saved one by one"
+    },
+    {
+     "id": "batch",
+     "kind": "success",
+     "label": "saved as a batch"
+    },
+    {
+     "id": "skip",
+     "kind": "blocked",
+     "label": "nothing saved"
+    }
+   ],
+   "cases": [
+    {
+     "id": "c1",
+     "name": "Ann saves 7 items",
+     "input": "7 items",
+     "path": [
+      "v1",
+      "v2"
+     ],
+     "outcome": "batch",
+     "explain": "Not empty, and more than 5.",
+     "brief": "Ann saves 7 items.",
+     "facts": [
+      "7 items"
+     ]
+    }
+   ]
+  }
+ ],
+ "quests": [],
+ "cracks": []
+}

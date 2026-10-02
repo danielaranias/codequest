@@ -1,0 +1,227 @@
+{
+ "id": "one",
+ "name": "Handle",
+ "theme": "meadow",
+ "summary": "One request </script><script>window.PWNED=1</script> handled.",
+ "paths": [
+  "src"
+ ],
+ "districts": [
+  {
+   "id": "d",
+   "name": "App"
+  }
+ ],
+ "entities": [
+  {
+   "id": "handle",
+   "kind": "entry",
+   "name": "handle",
+   "district": "d",
+   "summary": "Entry.",
+   "details": "Takes a request.",
+   "source": [
+    {
+     "file": "src/app.js",
+     "lines": [
+      1,
+      5
+     ],
+     "anchor": "export function handle"
+    }
+   ]
+  },
+  {
+   "id": "auth",
+   "kind": "guardrail",
+   "name": "user check",
+   "district": "d",
+   "summary": "Needs a user.",
+   "details": "401 without one.",
+   "source": [
+    {
+     "file": "src/app.js",
+     "lines": [
+      2,
+      2
+     ],
+     "anchor": "if (!req.user)"
+    }
+   ],
+   "guard": {
+    "rule": "must have user",
+    "checks": "req.user",
+    "onFail": "401"
+   }
+  },
+  {
+   "id": "describe",
+   "kind": "module",
+   "name": "describe",
+   "district": "d",
+   "summary": "Names a response.",
+   "details": "Reads the status.",
+   "source": [
+    {
+     "file": "src/app.js",
+     "lines": [
+      7,
+      11
+     ],
+     "anchor": "export function describe"
+    }
+   ]
+  }
+ ],
+ "flows": [
+  {
+   "id": "f",
+   "name": "Handle a request",
+   "summary": "s",
+   "trigger": "a request",
+   "start": "s1",
+   "steps": [
+    {
+     "id": "s1",
+     "at": "auth",
+     "action": "Is there a user?",
+     "next": [
+      {
+       "to": "s2",
+       "when": "the request has a user"
+      },
+      {
+       "to": "outcome:no",
+       "when": "the request has no user"
+      }
+     ]
+    },
+    {
+     "id": "s2",
+     "at": "handle",
+     "action": "How many items?",
+     "next": [
+      {
+       "to": "outcome:ok",
+       "when": "10 items or fewer"
+      },
+      {
+       "to": "outcome:big",
+       "when": "more than 10 items"
+      }
+     ]
+    }
+   ],
+   "outcomes": [
+    {
+     "id": "ok",
+     "kind": "success",
+     "label": "200"
+    },
+    {
+     "id": "no",
+     "kind": "blocked",
+     "label": "401"
+    },
+    {
+     "id": "big",
+     "kind": "blocked",
+     "label": "413"
+    }
+   ],
+   "cases": [
+    {
+     "id": "c1",
+     "name": "Ann, 3 items",
+     "input": "user ann, 3 items",
+     "path": [
+      "s1",
+      "s2"
+     ],
+     "outcome": "ok",
+     "explain": "Has a user and is small.",
+     "brief": "Ann sends 3 items.",
+     "facts": [
+      "user: ann",
+      "3 items"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "g",
+   "name": "Describe a response",
+   "summary": "s",
+   "trigger": "a response",
+   "start": "d1",
+   "steps": [
+    {
+     "id": "d1",
+     "at": "describe",
+     "action": "Is the status 500 or more?",
+     "next": [
+      {
+       "to": "d2",
+       "when": "the status is below 500"
+      },
+      {
+       "to": "outcome:broken",
+       "when": "the status is 500 or more"
+      }
+     ]
+    },
+    {
+     "id": "d2",
+     "at": "describe",
+     "action": "Is the status 400 or more?",
+     "next": [
+      {
+       "to": "outcome:refused",
+       "when": "the status is 400 or more"
+      },
+      {
+       "to": "outcome:fine",
+       "when": "the status is below 400"
+      }
+     ]
+    }
+   ],
+   "outcomes": [
+    {
+     "id": "fine",
+     "kind": "success",
+     "label": "fine"
+    },
+    {
+     "id": "refused",
+     "kind": "blocked",
+     "label": "refused"
+    },
+    {
+     "id": "broken",
+     "kind": "error",
+     "label": "broken"
+    }
+   ],
+   "cases": [
+    {
+     "id": "c1",
+     "name": "A 413 response",
+     "input": "status 413",
+     "path": [
+      "d1",
+      "d2"
+     ],
+     "outcome": "refused",
+     "explain": "Below 500, but 400 or more.",
+     "brief": "A response with status 413.",
+     "facts": [
+      "status: 413"
+     ]
+    }
+   ]
+  }
+ ],
+ "quests": [],
+ "cracks": []
+}

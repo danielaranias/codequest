@@ -30,7 +30,8 @@
       el('div', { class: 'row' },
         el('button', { class: 'btn primary', text: 'Start the journey', onclick: start }),
         el('button', { class: 'btn', text: 'Something is broken — find it', onclick: () => { start(); U.focusSearch(); } })),
-      el('p', { class: 'sub2', text: 'In a hurry? Search for the logic you need and jump straight in. Press / any time.' }));
+      el('p', { class: 'sub2', text: 'In a hurry? Search for the logic you need and jump straight in. Press / any time.' }),
+      el('p', { class: 'ver', text: 'CodeQuest ' + (window.CODEQUEST_CONFIG?.version || window.CODEQUEST_VERSION || '') }));
     i.append(box);
   };
 

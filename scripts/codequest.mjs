@@ -77,7 +77,7 @@ async function main() {
       const { url, config } = await startServer({ repo, port: Number(flags.port ?? 4477), opts });
       if (config.ignored.length) console.log(C.y(`Ignored ${config.ignored.join(', ')} in this repo's .codequest/config.json — a repo may not choose what runs on your machine. Use flags or ${'~/.config/codequest/config.json'}.`));
       console.log(C.d(`  agent: ${config.agent.kind}   tests: ${config.testCommand ? `${config.testCommand} (${config.testSource})` : 'none — pass --test "<command>" to enable real runs'}`));
-      console.log('\n' + C.b('CodeQuest is running: ') + url + C.d('   (Ctrl+C to stop)'));
+      console.log('\n' + C.b(`CodeQuest ${JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version} is running: `) + url + C.d('   (Ctrl+C to stop)'));
       console.log(C.d('  The link carries a one-time key for this run. Do not share it.'));
       if (!flags['no-open']) {
         const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
@@ -142,7 +142,7 @@ export function exportHtml(W, { title, fragment } = {}) {
   const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   html = html.replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${css}\n</style>`);
   html = html.replace(/<!--CW:SCRIPTS-->[\s\S]*<!--\/CW:SCRIPTS-->/, () =>
-    `<script>window.CODEQUEST_WORLD=${safeJson(W)};</script>\n<script>\n${safe(scripts.join('\n;\n'))}\n</script>`);
+    `<script>window.CODEQUEST_WORLD=${safeJson(W)};</script>\n<script>window.CODEQUEST_VERSION=${JSON.stringify(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version)};</script>\n<script>\n${safe(scripts.join('\n;\n'))}\n</script>`);
   if (title) html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${escHtml(title)}</title>`);
   if (fragment) {
     // claude.ai artifact form: the host adds doctype/html/head/body itself

@@ -13,12 +13,15 @@ compatibility: Requires Node.js 18+ and git. Works in Claude Code as a plugin an
    codequest status --fetch
    ```
    Say which worlds are stale (they show fog in the game and can be re-mapped from the sync chip).
-3. Start the server **in the background** (it keeps running):
+3. If a CodeQuest game from an earlier run is still listening on the port, stop it first (it may be an
+   older version of the game): find it with `lsof -ti tcp:4477` and stop that process, then start fresh.
+   Start the server **in the background** (it keeps running):
    ```
    codequest play "$PWD" --port 4477
    ```
    A port in the user's request ("$ARGUMENTS") replaces 4477; if the port is busy use `--port 0`.
-   It opens the browser and prints a link that ends in `#t=<key>`.
+   It opens the browser and prints `CodeQuest <version> is running:` and a link that ends in `#t=<key>`.
+   Tell the user the version.
 4. Give the user **the full link, including the `#t=` part** — the game refuses to talk to the
    server without that key — and the controls in one short paragraph: world 1 is open and the
    rest unlock in order; press Start on the mission board, carry the case and pick the right road

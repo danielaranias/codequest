@@ -19,6 +19,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GAME = path.join(ROOT, 'game');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
+// Shown in the game and in the terminal, so a player can tell which version is really running.
+export const VERSION = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return '?'; } })();
+
 export function userConfigPath() {
   return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'codequest', 'config.json');
 }
@@ -302,7 +305,7 @@ export function startServer({ repo, port = 4477, opts = {} }) {
       let content = fs.readFileSync(file);
       if (rel === '/index.html') {
         // config is inert JSON (not a script) and holds no secret: the token arrives in the URL fragment
-        const conf = { mode: 'live', repoPath: repo, agent: cfg.agent.kind, testCommand: cfg.testCommand, testSource: cfg.testSource };
+        const conf = { mode: 'live', version: VERSION, repoPath: repo, agent: cfg.agent.kind, testCommand: cfg.testCommand, testSource: cfg.testSource };
         const tag = `<script type="application/json" id="cw-config">${JSON.stringify(conf).replace(/</g, '\\u003c')}</script>`;
         content = String(content).replace('<!--CW:HEAD-->', () => tag);
       }

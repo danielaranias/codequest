@@ -404,3 +404,5 @@ body.in-mission .ptabs button[data-k="ask"], body.in-mission .ptabs button[data-
 .caption.mission .cap-choices .dest { display: block; font-size: 12px; color: #6b7d88; margin-top: 2px; }
 .caption.mission .cap-choices button { padding: 9px 11px; }
 .fact.more { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
+
+.intro .ver { margin-top: 14px; font-size: 12px; color: var(--muted); opacity: 0.7; }

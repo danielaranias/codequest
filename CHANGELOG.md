@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.1
+- The game and the terminal show which version is running; `play` replaces an older game still on the port.
+
 ## 1.3.0
 - Focus while deciding: at a fork only the question and your facts stay on screen. The guide banner hides, the
   "what the user sees" panel folds, and a building's panel shows no second puzzle during a mission.

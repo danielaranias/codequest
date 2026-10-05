@@ -10,6 +10,8 @@
   U.updateHUD = function () {
     if (!G.W) return;
     $('#crumb-repo').textContent = G.W.repo.name;
+    const ver = window.CODEQUEST_CONFIG?.version || window.CODEQUEST_VERSION;
+    if (ver) $('#crumb-repo').title = 'CodeQuest ' + ver;
     $('#crumb-world').textContent = G.scene === 'world' ? G.world().name : '';
     $('#btn-sail').hidden = G.scene !== 'world';
     const lvl = G.level();

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+- Mapping says up front how long it will take and reports each world as it lands.
+- One copy-paste install line for Claude Code in the terminal.
+
 ## 1.2.0
 - Search by meaning: describe a symptom in your own words and your own agent (Claude Code or Codex)
   points at the flows and buildings behind it, with a one-line reason for each. Word search stays instant and offline.

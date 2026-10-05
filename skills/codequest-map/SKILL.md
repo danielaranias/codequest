@@ -62,6 +62,11 @@ repo is large (>300 source files) or the order is not obvious from the code.
 
 ## 3. Map each world (parallel)
 
+Before you start the mappers, tell the user in one line how long to expect: about 4 minutes for a
+small library, 15 to 30 minutes for a large app, and that the game is not ready until you say
+"the map is built". Each time a world lands, say so in one line ("3 of 8 worlds mapped"), so the
+wait never looks like a hang. Do not suggest playing before `codequest build` has passed.
+
 For each world, spawn one subagent (Agent/Task tool, general-purpose) **in parallel**, giving it:
 the world id, name, theme, its paths, the output of `codequest format`, and these requirements:
 

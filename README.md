@@ -91,7 +91,8 @@ challenge, simulate, tasks) use your own Claude Code or Codex plan. Walking, mis
 snapshots use no AI at all.
 
 One measured run, as a rough guide: mapping a 75-file library with Claude Code took about 4 minutes
-and about $3 at API prices, and gave 6 worlds and 72 missions. A search by meaning takes about 5 seconds.
+and about $3 at API prices, and gave 6 worlds and 72 missions. A large app with 8 worlds took about
+20 to 30 minutes. Wait for "the map is built" before you play. A search by meaning takes about 5 seconds.
 
 ## Private and safe by design
 

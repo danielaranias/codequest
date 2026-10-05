@@ -42,23 +42,14 @@ Not in a hurry? Play it as a journey: clear a world, and the next one comes out 
 
 Needs Node.js 18+ and git. No dependencies, no build step, no account.
 
-**Claude Code**
-
-From your terminal:
+**Claude Code** — paste this into your terminal:
 
 ```
-claude plugin marketplace add danielaranias/codequest
-claude plugin install codequest@codequest
+claude plugin marketplace add danielaranias/codequest && claude plugin install codequest@codequest
 ```
 
-Or type the same thing inside a Claude Code session, as slash commands:
-
-```
-/plugin marketplace add danielaranias/codequest
-/plugin install codequest@codequest
-```
-
-Then start `claude` in your repo.
+Then start `claude` in your repo. (Already inside Claude Code? The same two commands work there
+as `/plugin marketplace add …` and `/plugin install …`.)
 
 **Codex, Cursor and other agents** (Agent Skills)
 

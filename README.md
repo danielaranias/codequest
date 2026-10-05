@@ -44,10 +44,21 @@ Needs Node.js 18+ and git. No dependencies, no build step, no account.
 
 **Claude Code**
 
+From your terminal:
+
+```
+claude plugin marketplace add danielaranias/codequest
+claude plugin install codequest@codequest
+```
+
+Or type the same thing inside a Claude Code session, as slash commands:
+
 ```
 /plugin marketplace add danielaranias/codequest
 /plugin install codequest@codequest
 ```
+
+Then start `claude` in your repo.
 
 **Codex, Cursor and other agents** (Agent Skills)
 

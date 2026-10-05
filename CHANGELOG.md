@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.2
+- Mapping reads like a voyage: a plan with a time estimate, one progress line per world, a clear "map is built" card.
+
 ## 1.2.1
 - Mapping says up front how long it will take and reports each world as it lands.
 - One copy-paste install line for Claude Code in the terminal.

@@ -1,6 +1,6 @@
 {
   "name": "codequest",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Take back control of a codebase the AI wrote: turn it into a game you can search, walk through and challenge. Works with Claude Code and Codex.",
   "type": "module",
   "bin": {

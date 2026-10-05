@@ -62,10 +62,34 @@ repo is large (>300 source files) or the order is not obvious from the code.
 
 ## 3. Map each world (parallel)
 
-Before you start the mappers, tell the user in one line how long to expect: about 4 minutes for a
-small library, 15 to 30 minutes for a large app, and that the game is not ready until you say
-"the map is built". Each time a world lands, say so in one line ("3 of 8 worlds mapped"), so the
-wait never looks like a hang. Do not suggest playing before `codequest build` has passed.
+### What the player sees while you map
+
+Mapping is the player's first minutes with the game, and it is a long wait. Make it read like a
+voyage, not a build log. Plain words, the game's own words, never the format's:
+say **buildings** (not entities), **missions** (not cases), **weak spots** (not cracks), **quests**.
+Never mention subagents, mappers, JSON, validation or file names in these lines.
+
+**Before you start**, one short block:
+
+```
+🧭 Charting <repo name>: <N> worlds, in the order your system runs
+   1. <World name>   2. <World name>   3. …
+⏳ About <X> minutes (small library ≈ 4, large app ≈ 15–30). I'll call out each world as it appears.
+```
+
+**Each time a world lands**, exactly one line, with a bar that fills:
+
+```
+🏝️  [███░░░░░] 3 of 8 · <World name> charted — 14 buildings, 12 missions, 4 weak spots
+```
+
+Then one more short line only if it earns it: the most interesting thing found there, in the
+team's own words ("Found the gate that refuses a campaign over budget."). No other commentary
+between worlds. If a world is taking long, do not fill the silence.
+
+**When the build has passed**, the closing block (section 5).
+
+Do not suggest playing before `codequest build` has passed.
 
 For each world, spawn one subagent (Agent/Task tool, general-purpose) **in parallel**, giving it:
 the world id, name, theme, its paths, the output of `codequest format`, and these requirements:
@@ -112,6 +136,15 @@ Fix every error it prints (it checks ids, edges, case paths, quest answers) and 
 
 ## 5. Finish
 
-Tell the user in 3–5 lines: the worlds (one line each), how many flows/quests/cracks, any uncharted
-areas, and that the `codequest-play` skill (`/codequest:play` in Claude Code) starts the game. Suggest committing `.codequest/meta.json` and
-`.codequest/worlds/` so teammates get the same map (world.json and progress are git-ignored).
+Close with this block, in the same voice, and nothing after it:
+
+```
+✅ The map is built: <N> worlds · <B> buildings · <M> missions · <Q> quests · <W> weak spots
+   1. <World name> — <what happens here, 6 words>
+   2. …
+🌫️  Not charted: <uncharted areas in a few words, or "nothing left out">
+▶️  Say "play CodeQuest" to start. Stuck on a bug? Press / in the game and describe it.
+```
+
+Then one plain line: suggest committing `.codequest/meta.json` and `.codequest/worlds/` so
+teammates play the same map (`world.json` and `progress/` are git-ignored).

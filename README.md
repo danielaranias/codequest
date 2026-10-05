@@ -9,6 +9,8 @@
   <img src="https://img.shields.io/badge/runs-on%20your%20machine-orange" alt="local">
 </p>
 
+https://github.com/user-attachments/assets/a59ae398-01f0-4af4-a3f2-8571e974e761
+
 <p align="center"><img src="docs/media/hero.gif" alt="Predicting which road the code takes at a fork, getting it wrong, and seeing why" width="720"></p>
 
 You asked the AI to fix it. It said "Fixed!". It is still broken. You explained again. "You're

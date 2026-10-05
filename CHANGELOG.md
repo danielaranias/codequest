@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0
+- Focus while deciding: at a fork only the question and your facts stay on screen. The guide banner hides, the
+  "what the user sees" panel folds, and a building's panel shows no second puzzle during a mission.
+- Fork cards lead with the condition; at most four fact chips; the mapper writes shorter text and `build` warns on long text.
+
 ## 1.2.2
 - Mapping reads like a voyage: a plan with a time estimate, one progress line per world, a clear "map is built" card.
 

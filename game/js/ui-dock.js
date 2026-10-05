@@ -108,7 +108,8 @@
       facts.length
         ? el('div', { class: 'facts' },
           el('span', { class: 'f-lbl', text: 'You carry' }),
-          ...facts.map((f) => el('span', { class: 'fact', text: f })))
+          ...facts.slice(0, showFull ? facts.length : 4).map((f) => el('span', { class: 'fact', text: f })),
+          !showFull && facts.length > 4 ? el('span', { class: 'fact more', text: '+' + (facts.length - 4) }) : null)
         : el('div', { class: 'mb-input', text: m.kase.input }));
     if (showFull && facts.length) body.append(el('div', { class: 'mb-input', text: m.kase.input }));
     const readCode = () => { const en = G.entity(cur.at); if (en) U.openEntity(en, 'code'); };

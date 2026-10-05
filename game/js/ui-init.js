@@ -39,6 +39,8 @@
     $('#btn-sail').onclick = () => G.setSail();
     $('#sync-chip').onclick = () => U.togglePane('sync');
     $('#drawer-close').onclick = shared.closeDrawer;
+    // the "what the user sees" panel folds to its title while the player decides; a click opens it again
+    CW.$('#screen .sp-head').onclick = () => $('#screen').classList.toggle('open');
     CW.$$('.tabs [data-pane]').forEach((bt) => (bt.onclick = () => U.togglePane(bt.dataset.pane)));
     const snd = $('#btn-sound');
     const paint = () => { snd.textContent = CW.soundOn() ? 'Sound on' : 'Sound off'; snd.setAttribute('aria-pressed', CW.soundOn()); };

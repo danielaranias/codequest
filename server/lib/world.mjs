@@ -120,7 +120,9 @@ function check(world) {
       for (const s of f.steps || []) {
         if (!eids.has(s.at)) e(`${F}/${s.id}: at "${s.at}" is not an entity`);
         edges[s.id] = new Set();
+        if (String(s.action || '').length > 80) warn.push(`${F}/${s.id}: action is ${String(s.action).length} characters — say it in 80 or fewer`);
         for (const n of s.next || []) {
+          if (isObj(n) && (s.next || []).length > 1 && String(n.when || '').length > 70) warn.push(`${F}/${s.id}: a fork condition is ${String(n.when).length} characters — a player must read it at a glance (70 or fewer)`);
           if (!isObj(n) || typeof n.to !== 'string' || !n.to) { e(`${F}/${s.id}: every road in "next" needs a "to"`); continue; }
           edges[s.id].add(n.to);
           if (n.to.startsWith('outcome:')) {
@@ -135,6 +137,8 @@ function check(world) {
         for (let i = 0; i + 1 < c.path.length; i++) {
           if (!edges[c.path[i]]?.has(c.path[i + 1])) e(`${C}: no edge ${c.path[i]} → ${c.path[i + 1]}`);
         }
+        if ((c.facts || []).length > 4) warn.push(`${C}: ${c.facts.length} facts — a player can hold 4; keep only what a fork on the path needs`);
+        if ((c.facts || []).some((x) => String(x).length > 28)) warn.push(`${C}: a fact is longer than 28 characters — make it a chip, not a sentence`);
         const forks = c.path.filter((id) => (edges[id]?.size || 0) > 1).length;
         if (forks < 2) warn.push(`${C}: crosses ${forks} fork(s) — a mission needs at least 2 to be worth playing`);
         if (!oids.has(c.outcome)) e(`${C}: unknown outcome "${c.outcome}"`);

@@ -69,6 +69,9 @@
     if (firstWin) { G.state.counters.toldMenus = 1; U.toast('New: Quests, Notes, Badges and the Lab are now open', 'badge'); }
     const cap = $('#caption');
     const m = G.mission;
+    // One thing at a time: while the player decides at a fork, everything that is not the question steps back.
+    document.body.classList.toggle('in-mission', !!m);
+    document.body.classList.toggle('deciding', !!m && m.phase === 'choose' && m.signs.length > 1);
     if (!m) { cap.hidden = true; U.updateHUD(); return; }
     cap.className = 'caption mission';
     cap.innerHTML = '';
@@ -97,17 +100,20 @@
     if (m.lastWrong) {
       cap.append(el('div', {
         class: 'cap-wrong',
-        text: `Not that road. It is only taken when ${m.lastWrong.when}. Look at what you carry.` }));
+        text: 'Not that one. Check it against what you carry.' }));
     }
     const only = m.signs.length === 1;
-    cap.append(el('div', { class: 'cap-q', text: only ? 'One road from here.' : 'Which road does the code take?' }));
+    cap.append(el('div', { class: 'cap-q', text: only ? 'One road from here.' : 'Which is true for your case?' }));
     const ch = el('div', { class: 'cap-choices' });
     m.signs.forEach((sg, k) => {
       ch.append(el('button', { disabled: sg.dead, class: sg.dead ? 'dead' : '', onclick: () => CW.mission.choose(k) },
         el('span', { class: 'num', text: sg.dead ? '✕' : only ? '→' : String(k + 1) }),
-        el('span', {},
-          el('span', { class: 'to', text: sg.label }),
-          only && /^always$/i.test(sg.when) ? null : el('span', { class: 'when', text: 'when ' + sg.when }))));
+        // the condition is what the player compares with the facts, so it leads; where it goes comes second
+        only && /^always$/i.test(sg.when)
+          ? el('span', {}, el('span', { class: 'cond', text: sg.label }))
+          : el('span', {},
+            el('span', { class: 'cond', text: sg.when.charAt(0).toUpperCase() + sg.when.slice(1) }),
+            el('span', { class: 'dest', text: '→ ' + sg.label.replace(/^Go to /, '') }))));
     });
     cap.append(ch);
   }

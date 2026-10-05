@@ -102,7 +102,10 @@ the world id, name, theme, its paths, the output of `codequest format`, and thes
   format): the `input` holds every fact needed at every fork; `when` texts are concrete and
   mutually exclusive; case names and step actions never give away the result; every case path
   crosses at least two forks; cases take different paths, including blocked/error ones.
-- Every case also gets `brief` (one plain sentence) and `facts` (2–5 short chips) — what the player reads first.
+- Every case also gets `brief` (one plain sentence) and `facts` (2–4 chips, 28 characters or fewer) — what the player reads first.
+- **Write for a glance.** A step `action` is 80 characters or fewer. Each `when` at a fork is 70 or fewer:
+  one plain condition the player can check against a fact chip. No jargon the player has not met,
+  no two conditions joined with "and/or" when one decides. `build` warns on anything longer; fix the warnings.
 - **Screens.** Open the real UI code (components, templates, CLI prints) and add a `screen` to each
   step where what the user sees changes, and to every outcome: real labels, button text, loading
   and error copy, as a 3–8 block wireframe. Server-only steps get none. No UI at all → `terminal`

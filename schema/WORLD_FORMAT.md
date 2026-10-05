@@ -196,10 +196,15 @@ Each case also carries a version a player can read at a glance:
 
 ```jsonc
 "brief": "A free user taps Apply with two filters picked.",      // one plain sentence, ≤ 110 chars
-"facts": ["free user", "2 filters picked", "online"]             // 2–5 chips, ≤ 32 chars each:
+"facts": ["free user", "2 filters picked", "online"]             // 2–4 chips, ≤ 28 chars each:
                                                                  // every fact a fork on the path needs
 ```
 `input` stays as the full technical statement; `brief` + `facts` are what the game shows first.
+
+The player reads a fork in a few seconds, so keep it short: a step `action` is 80 characters or
+fewer, and each `when` at a fork is 70 or fewer, one plain condition that can be checked against a
+fact chip ("no builds left today", not "when the last allowance answer said no builds left today or
+this month"). Put the detail in the code reference, not in the sentence. `build` warns on longer text.
 
 ## Quest — how the player proves understanding
 

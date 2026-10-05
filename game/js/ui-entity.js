@@ -99,7 +99,8 @@
       }
       box.append(card);
     }
-    for (const k of (w.cracks || []).filter((k) => k.at === en.id)) box.append(crackCard(w, k));
+    // a weak-spot puzzle is a second question; never put it beside a mission's own question
+    if (!G.mission) for (const k of (w.cracks || []).filter((k) => k.at === en.id)) box.append(crackCard(w, k));
   }
 
   // Code tab: the lines that decide the current fork come first.

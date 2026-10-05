@@ -391,3 +391,16 @@ body.novice .tabs, body.novice #mastery, body.novice .adv, body.novice #sync-chi
 .results .thinking { display: flex; align-items: center; gap: 10px; padding: 12px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); margin-top: 4px; }
 .results .dots { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(196, 160, 255, 0.3); border-top-color: #d7b7ff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* focus: one question on screen while the player decides at a fork */
+body.deciding #guide { display: none !important; }
+body.deciding .screenp:not(.open) .device, body.deciding .screenp:not(.open) .sp-note { display: none; }
+body.deciding .screenp:not(.open) { width: auto; padding: 7px 12px; opacity: 0.85; }
+body.deciding .screenp:not(.open) #sp-name { display: none; }
+.screenp .sp-head { cursor: pointer; }
+body.deciding .screenp:not(.open) .sp-head::after { content: ' ▸'; color: var(--muted); }
+body.in-mission .ptabs button[data-k="ask"], body.in-mission .ptabs button[data-k="more"] { display: none; }
+.caption.mission .cap-choices .cond { display: block; font-weight: 700; font-size: 14px; line-height: 1.3; }
+.caption.mission .cap-choices .dest { display: block; font-size: 12px; color: #6b7d88; margin-top: 2px; }
+.caption.mission .cap-choices button { padding: 9px 11px; }
+.fact.more { background: transparent; color: var(--muted); border: 1px dashed var(--line); }

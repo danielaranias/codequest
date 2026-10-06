@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.2
+- Mapping leaves no trace outside `.codequest/`: it never runs the project's build or tests, and checks `git status` before it finishes.
+
 ## 1.3.1
 - The game and the terminal show which version is running; `play` replaces an older game still on the port.
 
